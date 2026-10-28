@@ -2,6 +2,8 @@ import {knowledgePillars,strategyTopics,strategyResearchSources} from './strateg
 import {portraitList,getPortrait,readPortrait,changePortrait,portraitVersions} from './project-portrait.ts';
 import {webSearch,publicSearchConfig,saveSearchConfig,searchConfigured} from './web-search.ts';
 import {meetingRoutes} from './meeting-routes.ts';
+import {p9Routes} from './p9/routes.ts';
+import {seedP9} from './p9/seed-p9.ts';
 import {initMaterialLibrary} from './materials.ts';
 import {restartMeetingJobs} from './meetings.ts';
 import {userMode,testRuntime} from './runtime-mode.ts';
@@ -26,7 +28,7 @@ import {createConversation,history,recent,startRun,controllers,prepareAction,exe
 import {AppError,scopeSchema} from '../../../packages/contracts/index.ts';
 import {initEvaluations} from './evaluations.ts';
 if(process.env.SALES_BUDDY_TEST_MODE==='1'&&(!testRuntime()||process.env.APP_PORT==='3001'))throw new Error('固定响应仅允许隔离测试数据库与测试端口');
-seed();initKnowledge();migrateMemories();
+seed();seedP9();initKnowledge();migrateMemories();
 await initMaterialLibrary();restartMeetingJobs();
 initEvaluations();
 for(const a of list('answers'))if(a.suggestionsStatus==='generating'){put('answers',a.id,{...a,suggestionsStatus:'failed',suggestionsError:'服务重启，请重试生成追问'},a.userId,a.scope.objectId);}
@@ -45,6 +47,7 @@ app.post('/mcp',async(req,res)=>{
 });
 app.get('/mcp',(_,res)=>res.status(405).json({error:'Use MCP POST transport'}));
 app.use('/api',meetingRoutes);
+app.use('/api',p9Routes);
 app.get('/api/session',(_,res)=>res.json({user:res.locals.user,mode:'live',model:modelStatus()}));
 app.post('/api/mode',(req,res)=>{userMode(req.body.mode);res.json({mode:'live'});});
 app.get('/api/objects/search',(req,res)=>{

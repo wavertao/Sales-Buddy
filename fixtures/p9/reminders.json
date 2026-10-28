@@ -1,0 +1,49 @@
+{
+  "bidId": "BID-20261010-003",
+  "demoClock": "2026-10-24",
+  "reminders": [
+    {
+      "id": "RM-01",
+      "kind": "到期前提醒",
+      "todoId": "TD-10",
+      "assignee": "陈磊",
+      "message": "答疑第4/7条书面回复将于10-25到期",
+      "channel": "待办提醒"
+    },
+    {
+      "id": "RM-02",
+      "kind": "逾期提醒+L2",
+      "todoId": "TD-05",
+      "assignee": "陈磊",
+      "escalatedTo": "SPP负责人",
+      "message": "审阅拆标分解表并提交BSD已逾期2天，已升级L2",
+      "channel": "待办提醒+日报洞察"
+    },
+    {
+      "id": "RM-03",
+      "kind": "逾期超72h进BPM",
+      "todoId": "TD-06",
+      "assignee": "张伟",
+      "escalatedTo": "BPM",
+      "message": "处理技术评审与报价排期冲突逾期超72h（10-21 09:00→10-24），自动进BPM",
+      "channel": "BPM待办"
+    },
+    {
+      "id": "RM-04",
+      "kind": "L3升级提醒",
+      "blockerId": "BK-02",
+      "assignee": "李明",
+      "escalatedTo": "L3",
+      "message": "报价文件未过BSD评审超时26h，今夜22:00升级L3",
+      "channel": "待办提醒"
+    },
+    {
+      "id": "RM-05",
+      "kind": "日报洞察",
+      "todoId": "TD-02",
+      "assignee": "王强",
+      "message": "指派2条拆解条目责任人今日到期，同步到部门主管日报",
+      "channel": "日报洞察"
+    }
+  ]
+}

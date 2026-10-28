@@ -1,0 +1,170 @@
+{
+  "bidId": "BID-20261010-003",
+  "files": [
+    {
+      "name": "商务标v2.docx",
+      "category": "投标文件",
+      "version": "v2",
+      "size": "4.2 MB",
+      "uploader": "王芳",
+      "updated": "10-20 14:20",
+      "status": "进行中"
+    },
+    {
+      "name": "技术标v3.docx",
+      "category": "投标文件",
+      "version": "v3",
+      "size": "8.1 MB",
+      "uploader": "陈磊",
+      "updated": "10-20 16:05",
+      "status": "进行中"
+    },
+    {
+      "name": "报价表v1.xlsx",
+      "category": "投标文件",
+      "version": "v1",
+      "size": "640 KB",
+      "uploader": "李明",
+      "updated": "10-18 11:30",
+      "status": "待更新",
+      "quoteGated": true
+    },
+    {
+      "name": "开工会纪要.pdf",
+      "category": "会议文档",
+      "version": "v1",
+      "size": "620 KB",
+      "uploader": "AI听记",
+      "updated": "10-22 15:30",
+      "status": "已归档"
+    },
+    {
+      "name": "客户澄清会录音.m4a",
+      "category": "会议文档",
+      "version": null,
+      "size": "32 MB",
+      "uploader": "李明",
+      "updated": "10-25 10:40",
+      "status": "已转写"
+    },
+    {
+      "name": "澄清问题清单.xlsx",
+      "category": "澄清材料",
+      "version": "v2",
+      "size": "210 KB",
+      "uploader": "陈磊",
+      "updated": "10-25 18:00",
+      "status": "进行中"
+    },
+    {
+      "name": "资质与业绩清单.pdf",
+      "category": "投标文件",
+      "version": "v1",
+      "size": "12 MB",
+      "uploader": "王芳",
+      "updated": "10-19 09:15",
+      "status": "已定稿"
+    },
+    {
+      "name": "招标文件v3.0.pdf",
+      "category": "招标文件原件",
+      "version": "v3",
+      "size": "18 MB",
+      "uploader": "AI解析",
+      "updated": "10-10 09:30",
+      "status": "只读",
+      "pages": 42
+    },
+    {
+      "name": "投标文件补充文件9.pdf",
+      "category": "投标文件",
+      "version": "v1",
+      "size": "1 MB",
+      "uploader": "王芳",
+      "updated": "10-19 09:15",
+      "status": "已归档"
+    },
+    {
+      "name": "投标文件补充文件10.pdf",
+      "category": "投标文件",
+      "version": "v1",
+      "size": "1 MB",
+      "uploader": "王芳",
+      "updated": "10-19 09:15",
+      "status": "已归档"
+    },
+    {
+      "name": "会议文档补充文件11.pdf",
+      "category": "会议文档",
+      "version": "v1",
+      "size": "1 MB",
+      "uploader": "王芳",
+      "updated": "10-19 09:15",
+      "status": "已归档"
+    },
+    {
+      "name": "会议文档补充文件12.pdf",
+      "category": "会议文档",
+      "version": "v1",
+      "size": "1 MB",
+      "uploader": "王芳",
+      "updated": "10-19 09:15",
+      "status": "已归档"
+    },
+    {
+      "name": "会议文档补充文件13.pdf",
+      "category": "会议文档",
+      "version": "v1",
+      "size": "1 MB",
+      "uploader": "王芳",
+      "updated": "10-19 09:15",
+      "status": "已归档"
+    },
+    {
+      "name": "会议文档补充文件14.pdf",
+      "category": "会议文档",
+      "version": "v1",
+      "size": "1 MB",
+      "uploader": "王芳",
+      "updated": "10-19 09:15",
+      "status": "已归档"
+    },
+    {
+      "name": "会议文档补充文件15.pdf",
+      "category": "会议文档",
+      "version": "v1",
+      "size": "1 MB",
+      "uploader": "王芳",
+      "updated": "10-19 09:15",
+      "status": "已归档"
+    },
+    {
+      "name": "澄清材料补充文件16.pdf",
+      "category": "澄清材料",
+      "version": "v1",
+      "size": "1 MB",
+      "uploader": "王芳",
+      "updated": "10-19 09:15",
+      "status": "已归档"
+    },
+    {
+      "name": "澄清材料补充文件17.pdf",
+      "category": "澄清材料",
+      "version": "v1",
+      "size": "1 MB",
+      "uploader": "王芳",
+      "updated": "10-19 09:15",
+      "status": "已归档"
+    },
+    {
+      "name": "招标文件原件补充文件18.pdf",
+      "category": "招标文件原件",
+      "version": "v1",
+      "size": "1 MB",
+      "uploader": "王芳",
+      "updated": "10-19 09:15",
+      "status": "已归档"
+    }
+  ],
+  "countsNote": "18个：投标文件6、会议文档7、澄清材料3、招标文件原件2；展示8行明细+10行补充文件凑齐分类计数。"
+}
