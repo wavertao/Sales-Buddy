@@ -1,0 +1,50 @@
+{
+  "bidId": "BID-20261010-003",
+  "blockers": [
+    {
+      "id": "BK-01",
+      "title": "技术标缺12项强制响应",
+      "level": "高",
+      "status": "已升级L2",
+      "overdue": "逾期3天",
+      "score": 92,
+      "owner": "王强",
+      "node": "③标书分解",
+      "signal": "missing_precondition"
+    },
+    {
+      "id": "BK-02",
+      "title": "报价文件未过BSD评审",
+      "level": "高",
+      "status": "待升级L3",
+      "overdue": "超时26h",
+      "score": 84,
+      "owner": "李明",
+      "node": "报价提报",
+      "signal": "overdue"
+    },
+    {
+      "id": "BK-03",
+      "title": "澄清2条超48h未回",
+      "level": "中",
+      "status": "已催办2次",
+      "overdue": "逾期1天",
+      "score": 66,
+      "owner": "陈磊",
+      "node": "⑤澄清跟进",
+      "signal": "overdue"
+    },
+    {
+      "id": "BK-04",
+      "title": "交付周期承诺已闭环",
+      "level": "低",
+      "status": "已闭环",
+      "overdue": null,
+      "score": null,
+      "owner": "张伟",
+      "node": "③标书分解",
+      "signal": "none"
+    }
+  ],
+  "countsNote": "共4个卡点（含1个已闭环），开放卡点3个；与驾驶舱“3个卡点”一致（开放口径）。"
+}
