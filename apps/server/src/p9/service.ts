@@ -78,7 +78,7 @@ export function listBids(user: User, q: Record<string, string>) {
   rows.sort((a, b) => (a.deadlineAt < b.deadlineAt ? -1 : 1));
   const limit = Math.min(50, Math.max(1, Number(q.limit) || 20));
   const cursor = Math.max(0, Number(q.cursor) || 0);
-  return { records: rows.slice(cursor, cursor + limit), total: rows.length, nextCursor: cursor + limit < rows.length ? cursor + limit : null };
+  return { records: rows.slice(cursor, cursor + limit), total: rows.length, nextCursor: cursor + limit < rows.length ? cursor + limit : null, today: todayStr() };
 }
 export function bidDetail(user: User, id: string) {
   const bid = loadBid(user, id);
@@ -96,6 +96,7 @@ export function bidDetail(user: User, id: string) {
       meetings: c.meetings.length, docs: c.docs.length,
     },
     node: { current: bid.currentNode, name: nodeName(bid.currentNode), display: nodeDisplay(bid.currentNode) },
+    today,
   };
 }
 
@@ -455,7 +456,7 @@ export function completeChecklistItem(user: User, bidId: string, itemId: string,
 export function getChecks(user: User, id: string) {
   const bid = loadBid(user, id);
   const c = collections(id);
-  return { bidId: id, pipeline: bid.aiPipeline, reviewStatus: bid.reviewStatus, report: runChecks(c.tasks, c.clarifications, c.checklist, bid.customerRequirements, todayStr()) };
+  return { bidId: id, pipeline: bid.aiPipeline, reviewStatus: bid.reviewStatus, report: runChecks(c.tasks, c.clarifications, c.checklist, bid.customerRequirements, todayStr()), checklist: c.checklist };
 }
 export function submitReview(user: User, id: string, body: { decision: string; reviewer?: string; notes?: string }) {
   let bid = loadBid(user, id);
