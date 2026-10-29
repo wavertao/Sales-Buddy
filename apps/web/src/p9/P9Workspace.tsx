@@ -155,11 +155,11 @@ export function P9Workspace({ api, user }: { api: (p: string, o?: Any) => Promis
   );
   const topbar = (
     <div className="p9-topbar">
-      <div><b>{MAIN_BID_LABEL} / 宁德时代 · 储能项目</b><p>进行中 · 节点 ③ 标书分解</p></div>
+      <div className="p9-topbar-left"><button className="p9-back" onClick={() => setView('list')}>←</button><div><b>{MAIN_BID_LABEL} / 宁德时代 · 储能项目</b><p>进行中 · 节点 ③ 标书分解</p></div></div>
       <div className="p9-row"><span className="p9-pill">距开标 12 天</span><button className="p9-btn soft" onClick={() => { const el = document.querySelector<HTMLInputElement>('.p9-dock input'); el?.focus(); }}>和纵横对话</button><button className="p9-btn primary" onClick={() => void createGroup()}>一键建群</button></div>
     </div>
   );
-  const nodeBar = <div className="p9-nodes">{NODE_BAR.map((n, i) => <span key={n.n} className={i === 2 ? 'now' : i < 2 ? 'done' : ''}>{i + 1} {n.n}<small>{n.d}</small></span>)}</div>;
+  const nodeBar = <div className="p9-nodes">{NODE_BAR.map((n, i) => <span key={n.n} className={i === 2 ? 'now' : i < 2 ? 'done' : ''}>{i + 1} {n.n}<small>{n.d}</small>{i === 2 && <i className="p9-node-badge">{BLOCKERS.length}</i>}</span>)}</div>;
   const tabsBar = <div className="p9-tabs">{TABS.map(([id, label]) => <button key={id} className={tab === id ? 'on' : ''} onClick={() => { setTab(id); setMeeting(null); setTodoId(null); }}>{label}</button>)}</div>;
   const detailShell = (body: React.ReactNode) => (
     <div className="p9-detail"><div className="p9-left"><div className="p9-brand">Sales Buddy</div><p className="p9-muted">今天：CATL 组织架构与决策链 / 宁德时代 · 续约策略 / 本周商机推进复盘<br />昨天：比亚迪储能项目报价 / 华东区线索转化分析</p><div className="p9-nav">{['投标全流程', '线索与商机', '客户 360', '商务活动', '资讯雷达', '我的日报', '我的工具箱', '好想法'].map(x => <span key={x} className={x === '投标全流程' ? 'on' : ''}>{x}</span>)}</div><p>👤 张小小</p><button className="p9-btn soft" onClick={() => setView('list')}>← 回投标列表</button></div>
@@ -171,16 +171,20 @@ export function P9Workspace({ api, user }: { api: (p: string, o?: Any) => Promis
   const reminderOf = (t: Any) => t.status === '已完成' ? '已完成' : ['10-21', '10-22', '10-23'].includes(t.due) ? '逾期 · 已升级 L2' : t.due === '今天' || t.due === '10-25' ? '到期前提醒 · 今日/明日到期' : '正常';
   const todoRows = todos.filter(t => todoFilter === '全部' || (todoFilter === '我的' && t.mine) || (todoFilter === '逾期' && reminderOf(t).startsWith('逾期')) || (todoFilter === '提醒' && reminderOf(t).includes('提醒')));
 
+  // 展示层小工具：节点进度（原型列表行内条实测：标书分解 30%、定标满格，即 (序号+1)/10）；
+  // 维度条颜色（原型 6 维实测色：82绿 / 76靛 / 55红 / 64·61·67橙，阈值取落在其间的整十数，属推断，见汇报）。
+  const nodePct = (node: string) => { const i = NODE_BAR.findIndex(n => node === n.n || node.startsWith(n.n)); return i < 0 ? -1 : (i + 1) * 10; };
+  const dimColor = (v: number) => v >= 80 ? '#34c759' : v >= 70 ? '#4f6cf7' : v >= 60 ? '#ff9500' : '#ff3b30';
   // ============ P9.0.1 投标列表 ============
   const listView = (
     <div className="p9-shell"><div className="p9-page">
-      <h1>投标</h1><p className="p9-muted">8 个在跟 · 3 个待我处理</p>
-      <div className="p9-row"><input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="搜索客户 / 项目名称" /><button className="p9-btn soft" onClick={() => setModal('search')}>表头列筛选</button><button className="p9-btn primary" onClick={() => setModal('create')}>新建投标</button><button className="p9-btn soft" onClick={() => setView('mobile')}>📱 移动端 390</button></div>
-      <div className="p9-row">{['全部 8', '进行中 5', '待我处理 3', '已交标 2', '已定标 2', '已流标 1'].map(p => <button key={p} className={'p9-pill-btn ' + (listFilter === p.split(' ')[0] ? 'on' : '')} onClick={() => setListFilter(p.split(' ')[0])}>{p}</button>)}<span className="p9-muted">按交标日升序</span></div>
-      <div className="p9-stats"><div><b>进行中 5</b><small>其中 2 个本周交标</small></div><div><b>待我处理 3</b><small>2 条阻塞 · 1 条今日到期</small></div><div><b>卡点 3</b><small>未派责任人 2 · 排期冲突 1</small></div><div><b>中标率 42%</b><small>近 12 个月 19 投 8 中</small></div></div>
+      <div className="p9-list-topbar"><div className="p9-list-title"><h1>投标</h1><span className="p9-muted">8 个在跟 · 3 个待我处理</span></div><div className="p9-list-actions"><input className="p9-list-search" value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="搜索客户 / 项目名称" /><button className="p9-btn primary" onClick={() => setModal('create')}>新建投标</button></div></div>
+      <div className="p9-row">{['全部 8', '进行中 5', '待我处理 3', '已交标 2', '已定标 2', '已流标 1'].map(p => <button key={p} className={'p9-pill-btn ' + (listFilter === p.split(' ')[0] ? 'on' : '')} onClick={() => setListFilter(p.split(' ')[0])}>{p}</button>)}<span className="p9-muted">按交标日升序</span><span className="p9-row-right"><button className="p9-btn soft" onClick={() => setModal('search')}>表头列筛选</button><button className="p9-btn soft" onClick={() => setView('mobile')}>📱 移动端 390</button></span></div>
+      <div className="p9-stats"><div><span className="p9-stat-label">进行中</span><b>5</b><small>其中 2 个本周交标</small></div><div><span className="p9-stat-label">待我处理</span><b>3</b><small>2 条阻塞 · 1 条今日到期</small></div><div><span className="p9-stat-label">卡点</span><b>3</b><small>未派责任人 2 · 排期冲突 1</small></div><div><span className="p9-stat-label">中标率</span><b>42%</b><small>近 12 个月 19 投 8 中</small></div></div>
+      <section className="p9-card"><div className="p9-list-head"><div className="p9-list-head-left"><h3>我参与的投标</h3><span className="p9-muted">商机进入当前节点工作页</span></div><div className="p9-list-head-right"><span className="p9-muted">共 {BIDS.length + 2} 个 · 显示 {filteredBids.length}</span><button className="p9-btn primary" onClick={() => setModal('create')}>发起投标</button></div></div>
       <table className="p9-table"><thead><tr><th>投标</th><th>当前轮次</th><th>当前节点</th><th>负责人</th><th>SPP 团队</th><th>交标 · 剩余</th><th>发起</th><th>状态</th></tr></thead>
-        <tbody>{filteredBids.map(b => <tr key={b.id} onClick={() => openDetail(b)}><td><b>{b.id}</b><br />{b.name}</td><td>{b.round}</td><td>{b.node}</td><td>{b.owner}</td><td>{b.team}</td><td>{b.due} · {b.left}</td><td>{b.from} {b.fromDate}</td><td>{b.status}</td></tr>)}</tbody></table>
-      <p className="p9-hint">点行进入当前节点工作页 · 共 8 个 · 显示 6 · 另有 2 个已归档（流标 / 放弃）</p>
+        <tbody>{filteredBids.map(b => <tr key={b.id} onClick={() => openDetail(b)}><td><b>{b.id}</b><br />{b.name}</td><td>{b.round}</td><td>{b.node}{nodePct(b.node) >= 0 && <div className="p9-node-progress"><i style={{ width: nodePct(b.node) + '%' }} /></div>}</td><td>{b.owner}</td><td>{b.team}</td><td>{b.due} · {b.left}</td><td>{b.from} {b.fromDate}</td><td>{b.status}</td></tr>)}</tbody></table></section>
+      <p className="p9-hint">点行进入当前节点工作页 · 共 {BIDS.length + 2} 个 · 显示 {filteredBids.length} · 另有 2 个已归档（流标 / 放弃）</p>
       <button className="p9-btn soft" onClick={() => setShowArchive(!showArchive)}>{showArchive ? '收起归档' : '查看归档'}</button>
       {showArchive && <p className="p9-muted">归档（演示）：BID-20260901-002 已流标 · BID-20260815-001 已放弃，编号不回收。</p>}
       <button className="p9-btn soft" onClick={() => setView('opp')}>商机详情 · 投标 Tab（宁德时代）→</button>
@@ -222,15 +226,19 @@ export function P9Workspace({ api, user }: { api: (p: string, o?: Any) => Promis
   const cockpitBody = (
     <div>
       {pipeBar}
-      <section className="p9-card"><div className="p9-row"><b>AI 投标驾驶舱</b><span className="p9-muted">AI 实时解析 · 10-24 09:40 更新</span><button className="p9-btn primary" onClick={() => notify('一键催办已发给 5 人（演示）。')}>一键催办 5 人</button></div>
-        <p>已解析 ATB 评审表 43 字段、拆标分解 34 条任务与 8 次澄清：健康度 68（安全线 80），3 个卡点、2 条逾期任务，距交标 12 天 —— 建议今天先闭环「技术标 12 项强制响应」与「报价文件过 BSD」。</p>
-        <div className="p9-stats"><div><b>健康度 68 / 100 · 需关注</b><small>安全线 80 · 较昨日 -4 · 下降 2 项</small></div><div><b>T-12 天 · 12 天 06 小时</b><small>交标 2026-11-05 14:00 · 首轮澄清 2026-10-25 · 剩 1 天</small></div><div><b>9 剩余工作日</b><small>已扣除周末 · 2 关键截止 · 4 未闭环任务</small></div></div>
-        <p>标书定稿需在 11-01 前完成；标书制作仍需 18 人日，仅剩 9 个工作日 —— 建议拆商务 / 技术两组并行，报价会前置到 10-28。</p>
-        <div className="p9-grid2"><div><h4>健康度 6 维 · 每 5 分钟刷新</h4>{HEALTH_DIMS.map(d => <div key={d.k} className="p9-bar-row"><span>{d.k}</span><div className="p9-track"><i style={{ width: d.v + '%' }} /></div><b>{d.v}</b></div>)}<p className="p9-muted">下降主因：技术部分 55（技术标缺 12 项强制响应）、报价文件 64（成本未过 BSD 评审）。</p></div>
-          <div><h4>卡点 · AI 识别（废标影响 / 关键路径 / 超时）</h4>{BLOCKERS.map(b => <div key={b.t} className="p9-item"><b>{b.t}</b><small>{b.level} · {b.state} · {b.over} · 评分 {b.score} · {b.owner}</small><p>{b.note}</p><button className="p9-btn soft" onClick={() => notify(b.act + '已发送（演示）。')}>{b.act}</button></div>)}</div></div>
-        <h4>逾期任务 · 自动升级（截止时间 + 依赖关系）</h4>{OVERDUE.map(o => <div key={o.t} className="p9-item"><b>{o.t}</b><small>{o.pri} · {o.state} · {o.over} · {o.owner}</small><button className="p9-btn soft" onClick={() => { setTab('todos'); }}>{o.act}</button></div>)}
-        <p className="p9-muted">逾期超 72h 自动进 BPM。</p>
-      </section>
+      <div className="p9-conclusion"><div><p className="p9-conclusion-title">AI 投标驾驶舱 <span className="p9-muted">AI 实时解析 · 10-24 09:40 更新</span></p><p className="p9-conclusion-text">已解析 ATB 评审表 43 字段、拆标分解 34 条任务与 8 次澄清：健康度 68（安全线 80），3 个卡点、2 条逾期任务，距交标 12 天 —— 建议今天先闭环「技术标 12 项强制响应」与「报价文件过 BSD」。</p></div><button className="p9-urge-btn" onClick={() => notify('一键催办已发给 5 人（演示）。')}>一键催办 5 人</button></div>
+      <section className="p9-card"><div className="p9-health-head"><h3>投标健康度</h3><span><span className="p9-muted">安全线 80 · 较昨日 -4 · 每 5 分钟刷新 · </span><span className="p9-health-status">需关注</span></span></div>
+        <div className="p9-health-main"><div className="p9-health-score"><b style={{ color: dimColor(68) }}>68</b><span>健康度 / 100</span></div><div className="p9-health-bars">{HEALTH_DIMS.map(d => <div key={d.k} className="p9-bar-row"><span>{d.k}</span><div className="p9-track"><i style={{ width: d.v + '%', background: dimColor(d.v) }} /></div><b>{d.v}</b></div>)}</div></div>
+        <p className="p9-health-note">下降主因：技术部分 55（技术标缺 12 项强制响应）、报价文件 64（成本未过 BSD 评审）。</p></section>
+      <section className="p9-card"><h3>剩余时间</h3>
+        <div className="p9-rem-big"><b>12</b><span> 天 06 小时</span></div>
+        <p className="p9-muted">交标 2026-11-05 14:00 · 首轮澄清 2026-10-25 · 剩 1 天</p>
+        <div className="p9-rem-cols"><div><b>9</b><span>剩余工作日</span></div><div><b>2</b><span>关键截止</span></div><div><b>4</b><span>未闭环任务</span></div></div>
+        <div className="p9-rem-warn">标书定稿需在 11-01 前完成；标书制作仍需 18 人日，仅剩 9 个工作日 —— 建议拆商务 / 技术两组并行，报价会前置到 10-28。</div></section>
+      <div className="p9-cockpit-cols">
+        <section className="p9-card"><h3>卡点 · AI 识别</h3>{BLOCKERS.map(b => <div key={b.t} className="p9-item"><div className="p9-item-head"><b>{b.t}</b><span className={b.level === '高' ? 'p9-badge-high' : 'p9-badge-mid'}>{b.level}</span></div><small>{b.state} · {b.over} · 评分 {b.score} · {b.owner}</small><p>{b.note}</p><button className="p9-btn soft" onClick={() => notify(b.act + '已发送（演示）。')}>{b.act}</button></div>)}</section>
+        <section className="p9-card"><h3>逾期任务</h3>{OVERDUE.map(o => <div key={o.t} className="p9-item"><div className="p9-item-head"><b>{o.t}</b><span className={o.pri === 'P0' ? 'p9-badge-high' : 'p9-badge-mid'}>{o.pri}</span></div><small>{o.state} · {o.over} · {o.owner}</small><button className="p9-btn soft" onClick={() => { setTab('todos'); }}>{o.act}</button></div>)}<p className="p9-muted">逾期超 72h 自动进 BPM。</p></section>
+      </div>
     </div>
   );
   // ============ P9.2.1 基本信息 ============
@@ -251,7 +259,7 @@ export function P9Workspace({ api, user }: { api: (p: string, o?: Any) => Promis
       <h4>AI 策略方向 · 基于上面三段生成 · 仅作方向建议</h4>
       <div className="p9-item"><b>主打点</b><p>用全生命周期 IRR 打穿：技术标写 LTSA + 10 年质保，商务标给 3-3-4 付款</p></div>
       <div className="p9-item"><b>避让点</b><p>不接纯价格战；EPC 总包与土建不在报价范围</p></div>
-      <div className="p9-item"><b>报价姿态</b><p>锚定度电成本而非设备单价，首轮留 6-8%，BAFO 再收敛</p></div>
+      <div className="p9-item"><b>报价姿态</b><p>锚定度电成本而非设备单价，具体报价由报价管理部门另行确定</p></div>
       <div className="p9-row"><button className="p9-btn soft" onClick={() => notify('策略方向已重新生成（演示）。')}>重新生成</button><button className="p9-btn primary" onClick={() => notify('已采用此方向，归档到投标实体。')}>采用此方向</button><button className="p9-btn soft" onClick={() => notify('已编辑后保存（演示）。')}>编辑后保存</button></div>
       <h4>策略版本历史 · 更新 → 再制作 → 确认闭环（与 BAFO 轮次关联快照）</h4>
       {strategyVersions.map(v => <div key={v.v} className="p9-item"><b>{v.v}</b><small>{v.date} · {v.state}</small><p>{v.note}</p>{v.state === '待确认' && <button className="p9-btn primary" onClick={() => { setStrategyVersions(vs => vs.map(x => x.v === v.v ? { ...x, state: '已采用' } : x)); notify('策略新版已确认并留存版本历史，闭环完成。'); }}>确认此版本</button>}</div>)}
@@ -282,7 +290,7 @@ export function P9Workspace({ api, user }: { api: (p: string, o?: Any) => Promis
   );
   // ============ P9.4 招标文件（空态 / 解析中 / 正式）===========
   const docsBody = (
-    <div><section className="p9-card">
+    <div>
       <div className="p9-row">{(['empty', 'parsing', 'parsed'] as const).map(m => <button key={m} className={'p9-btn ' + (docsMode === m ? 'primary' : 'soft')} onClick={() => setDocsMode(m)}>{m === 'empty' ? '空态' : m === 'parsing' ? 'AI 解析中' : '已解析'}</button>)}</div>
       {docsMode === 'empty' && <div><h3>还没有上传招标文件</h3><p>上传后 AI 会解析章节结构、生成拆标分解条目，并按配置表带出默认责任人与工期。</p>
         <div className="p9-row"><button className="p9-btn primary" onClick={() => { setDocsMode('parsing'); void call('/bids/' + bid.id + '/documents', 'POST', {}); }}>上传招标文件</button><button className="p9-btn soft" onClick={() => notify('从商机附件导入（演示）：附件选择界面原型未明确。')}>从商机附件导入</button></div>
@@ -291,27 +299,27 @@ export function P9Workspace({ api, user }: { api: (p: string, o?: Any) => Promis
         <ol><li>✓ 上传完成 · 42 页 · 18 MB</li><li>▶ 解析章节结构 · 正在识别第六章 投标文件格式…</li><li>抽取技术要求与商务条款 · 34 条候选要求</li><li>按配置表生成拆标分解条目 · 预计生成 34 条</li></ol>
         <p className="p9-muted">解析在后台进行，可以先去其他 Tab，完成后会通知你。</p>
         <button className="p9-btn primary" onClick={async () => { await call('/bids/' + bid.id + '/ai/decompose', 'POST', {}); setDocsMode('parsed'); setPipe('decomposing'); setDraftPending(true); notify('AI 拆解完成：解析结果已更新计划草稿，待确认并下发。'); }}>模拟解析完成 → 已解析</button></div>}
-      {docsMode === 'parsed' && <div><h3>招标文件 · v3.0 终版</h3><p>XX储能项目招标文件.pdf · 42 页 · 已解析 {DOC_ITEMS.length} 条</p>
-        <div className="p9-grid2"><div><h4>章节树</h4>{CHAPTERS.map(c => <div key={c.n} className="p9-item">{c.n}<b> {c.c} 条</b></div>)}<p className="p9-hint">章节条数由分解条目算出（合计 {DOC_ITEMS.length} 条）；原型章节原文合计与此不一致，见汇报。</p></div>
+      {docsMode === 'parsed' && <section className="p9-card"><h3>招标文件 · v3.0 终版</h3><p>XX储能项目招标文件.pdf · 42 页 · 已解析 {DOC_ITEMS.length} 条</p>
+        <div className="p9-grid2 p9-docs-grid"><div><h4>章节树</h4>{CHAPTERS.map(c => <div key={c.n} className="p9-item">{c.n}<b> {c.c} 条</b></div>)}<p className="p9-hint">章节条数由分解条目算出（合计 {DOC_ITEMS.length} 条）；原型章节原文合计与此不一致，见汇报。</p></div>
           <div><h4>拆标分解表 · {DOC_ITEMS.length} 条 · 命中 28/34</h4><div className="p9-row"><button className="p9-btn soft" onClick={() => setDocsMode('parsing')}>AI 解析</button><button className="p9-btn primary" onClick={() => { setPipe('dispatched'); notify('已提交 BSD 审核：拆解表版本已锁定，BSD 收到待办；按逻辑卡③去计划只读页。'); setTab('plan'); setPlanMode('item'); }}>提交 BSD 审核</button></div>
             <p className="p9-muted">共 {DOC_ITEMS.length} 条 · 已完成 {DOC_ITEMS.filter(d => d.status === '已完成').length} · 未派 {DOC_ITEMS.filter(d => d.owner === '未派').length} · 其余为进行中 / 待开始 / 阻塞（由条目算出；原型「已派 22 · 未派 6 · 已完成 6」汇总与此不一致，见汇报）</p></div></div>
         <table className="p9-table"><thead><tr><th>条目</th><th>来源条款</th><th>类别</th><th>责任人</th><th>排期</th><th>状态</th></tr></thead>
           <tbody>{(showAllDocs ? DOC_ITEMS : DOC_ITEMS.slice(0, 7)).map(d => <tr key={d.t}><td>{d.t}</td><td>{d.src}</td><td>{d.cat}</td><td>{d.owner}</td><td>{d.date}</td><td>{d.status}</td></tr>)}</tbody></table>
         <button className="p9-btn soft" onClick={() => setShowAllDocs(!showAllDocs)}>{showAllDocs ? '收起' : '展开其余 ' + (DOC_ITEMS.length - 7) + ' 条'}</button>
         <p className="p9-hint">拆解助手：改条目只产生草稿态，不影响已派发条目；已人工改过的条目重新解析不覆盖。</p>
-        <button className="p9-btn soft" onClick={() => setDocsMode('parsing')}>上传新版招标文件</button></div>}
-    </section></div>
+        <button className="p9-btn soft" onClick={() => setDocsMode('parsing')}>上传新版招标文件</button></section>}
+    </div>
   );
   // ============ P9.5 会议 ============
   const meetingsBody = meeting ? (
-    <div><section className="p9-card"><button className="p9-btn soft" onClick={() => setMeeting(null)}>← 会议列表</button><h3>客户澄清会（第一轮）</h3><p className="p9-muted">顶栏会议时间 10-25 10:00–11:20 · AI 纪要 · {meetingSaved ? '已保存' : '编辑中 · 保存后写入纪要'}</p>
-      <div className="p9-grid2"><div><h4>AI 纪要</h4><p><b>议题：</b>客户就 BESS 台数优化、质保年限延长、远程调试支持提出 3 个澄清问题。</p><p><b>讨论要点：</b>技术侧：18 台会影响可用率承诺，建议维持 20 台。商务侧：质保以 5 年为基础、10 年做可选包单独报价。远程调试可做，但需在技术标中明确边界（不含现场网络改造）。</p><p><b>决议：</b>维持 20 台报价；质保出 5 年 / 10 年两版；远程调试写入技术标作为加分项；剩余 1 项由陈磊 10-26 前书面答复。</p>
+    <div><div className="p9-crumb"><button className="p9-btn soft" onClick={() => setMeeting(null)}>← 会议列表</button><span className="p9-muted">会议 / 客户澄清会（第一轮）</span></div><p className="p9-muted">顶栏会议时间 10-25 10:00–11:20 · AI 纪要 · {meetingSaved ? '已保存' : '编辑中 · 保存后写入纪要'}</p>
+      <div className="p9-grid2"><section className="p9-card"><div><h4>AI 纪要</h4><p><b>议题：</b>客户就 BESS 台数优化、质保年限延长、远程调试支持提出 3 个澄清问题。</p><p><b>讨论要点：</b>技术侧：18 台会影响可用率承诺，建议维持 20 台。商务侧：质保以 5 年为基础、10 年做可选包单独报价。远程调试可做，但需在技术标中明确边界（不含现场网络改造）。</p><p><b>决议：</b>维持 20 台报价；质保出 5 年 / 10 年两版；远程调试写入技术标作为加分项；剩余 1 项由陈磊 10-26 前书面答复。</p>
         <div className="p9-row"><button className="p9-btn soft" onClick={() => setMeetingSaved(false)}>取消</button><button className="p9-btn primary" onClick={() => setMeetingSaved(true)}>保存</button><button className="p9-btn soft">查看转写全文</button></div>
         <h4>本场结论 · 4 条</h4><ul><li>BESS 可按 20 台报价，不接受减至 18 台</li><li>质保以 5 年为基础版本，10 年作为可选项单独报价</li><li>远程调试要求写入技术标，作为加分项</li><li>澄清答复截止 10-25 18:00，逾期视为放弃</li></ul>
         <h4>本场待办 · 3 条</h4><ul><li>补充储能系统消防方案细节（陈磊 · 10-26 / 进行中）</li><li>明确远程调试实现方案与成本（陈磊 · 10-26 / 待开始）</li><li>质保 5 年 / 10 年两版重新报价（王芳 · 10-28 / 已完成）</li></ul>
-        <button className="p9-btn primary" onClick={() => { notify('全部待办已派发到 RACI，澄清条目回写澄清 Tab。'); setTab('todos'); }}>全部派发</button></div>
-        <div><h4>参与人（3 人）</h4><p>李明（SLS · 发起人）、陈磊（SC · 技术答复）、王芳（AMD · 商务答复）</p><h4>录音与转写</h4><p>客户澄清会录音.m4a · 80 分钟 · 32 MB · 转写已完成 · 98% 准确 · 发言 3 人 · 自动分离</p><button className="p9-btn soft">重转写</button><h4>本场关联</h4><p>澄清条目 3 条 · 已同步到澄清 Tab；会议待办 3 条 · 待派发；相关文件 客户澄清会录音.m4a</p></div></div>
-      </section></div>
+        <button className="p9-btn primary" onClick={() => { notify('全部待办已派发到 RACI，澄清条目回写澄清 Tab。'); setTab('todos'); }}>全部派发</button></div></section>
+        <section className="p9-card"><div><h4>参与人（3 人）</h4><p>李明（SLS · 发起人）、陈磊（SC · 技术答复）、王芳（AMD · 商务答复）</p><h4>录音与转写</h4><p>客户澄清会录音.m4a · 80 分钟 · 32 MB · 转写已完成 · 98% 准确 · 发言 3 人 · 自动分离</p><button className="p9-btn soft">重转写</button><h4>本场关联</h4><p>澄清条目 3 条 · 已同步到澄清 Tab；会议待办 3 条 · 待派发；相关文件 客户澄清会录音.m4a</p></div></section></div>
+    </div>
   ) : (
     <div><section className="p9-card"><div className="p9-row"><h3>会议</h3><span className="p9-muted">6 场 · 已出纪要 3 · 待纪要 1 · 待开 2</span><button className="p9-btn soft" onClick={() => notify('导入听记（演示）：录音转写后产出纪要、待办、澄清条目。')}>导入听记</button><button className="p9-btn soft">预约会议</button></div>
       <div className="p9-row">{['全部 6', '待开 2', '待纪要 1', '已出纪要 3'].map(p => <span key={p} className="p9-pill-btn">{p}</span>)}</div>
@@ -321,11 +329,11 @@ export function P9Workspace({ api, user }: { api: (p: string, o?: Any) => Promis
   );
   // ============ P9.6 文件 ============
   const filesBody = (
-    <div><section className="p9-card"><div className="p9-row"><h3>文件清单</h3><span className="p9-muted">18 个文件 · 会议文档与投标文件统一管理</span><button className="p9-btn soft">上传文件</button><button className="p9-btn soft" onClick={() => notify('AI 核查建议已转成待办（演示）。')}>AI 核查</button></div>
-      <div className="p9-row">{['全部文件 18', '投标文件 6', '会议文档 7', '澄清材料 3', '招标文件原件 2'].map(p => <span key={p} className="p9-pill-btn">{p}</span>)}</div>
+    <div><div className="p9-files-layout"><aside className="p9-files-nav">{['全部文件 18', '投标文件 6', '会议文档 7', '澄清材料 3', '招标文件原件 2'].map((p, i) => <span key={p} className={'p9-files-nav-item ' + (i === 0 ? 'on' : '')}>{p}</span>)}</aside>
+    <section className="p9-card"><div className="p9-row"><h3>文件清单</h3><span className="p9-muted">18 个文件 · 会议文档与投标文件统一管理</span><button className="p9-btn soft">上传文件</button><button className="p9-btn soft" onClick={() => notify('AI 核查建议已转成待办（演示）。')}>AI 核查</button></div>
       <table className="p9-table"><thead><tr><th>文件名</th><th>类型</th><th>版本</th><th>大小</th><th>上传人</th><th>更新时间</th><th>状态</th></tr></thead>
         <tbody>{FILES.map(f => <tr key={f.n}><td>{f.n}</td><td>{f.type}</td><td>{f.v}</td><td>{f.size}</td><td>{f.u}</td><td>{f.t}</td><td>{f.s}</td></tr>)}</tbody></table>
-      <p className="p9-hint">商务标 · v2 为当前版本 · 定稿后自动锁版 · 展示 8 行，其余 10 行按分类折叠（分类数 6+7+3+2=18；资质证明行属原型分类外行，见汇报）。报价表下载受 BAFO 屏报价权限约束。</p><button className="p9-btn soft">批量下载</button></section></div>
+      <p className="p9-hint">商务标 · v2 为当前版本 · 定稿后自动锁版 · 展示 8 行，其余 10 行按分类折叠（分类数 6+7+3+2=18；资质证明行属原型分类外行，见汇报）。报价表下载受 BAFO 屏报价权限约束。</p><button className="p9-btn soft">批量下载</button></section></div></div>
   );
 
   // ============ P9.7 待办与澄清（含详情、完成确认、评论弹层）===========
@@ -356,7 +364,8 @@ export function P9Workspace({ api, user }: { api: (p: string, o?: Any) => Promis
       <table className="p9-table"><thead><tr><th>✓</th><th>待办事项</th><th>来源</th><th>负责人</th><th>截止</th><th>优先级</th><th>提醒态</th><th>操作</th></tr></thead>
         <tbody>{todoRows.map(t => <tr key={t.id} draggable onDragStart={() => { dragTodoRef.current = t.id; }}><td><input type="checkbox" checked={t.status === '已完成'} onChange={() => { setTodoId(t.id); setModal('complete'); }} /></td><td>{t.t}</td><td>{t.src}</td><td>{t.owner}</td><td>{t.due}</td><td>{t.pri}</td><td><span className="p9-pill">{reminderOf(t)}</span></td><td><button className="p9-btn soft" onClick={() => setTodoId(t.id)}>查看详情</button><button className="p9-btn soft" onClick={() => { setTodoId(t.id); setModal('comment'); }}>评论 {t.comments}</button></td></tr>)}</tbody></table>
       <p className="p9-hint">已完成 {todos.filter(t => t.status === '已完成').length} 项 · 逾期 {todos.filter(t => reminderOf(t).startsWith('逾期')).length} 项 · 提醒态：到期前提醒（今日/明日到期）/ 逾期（已升级 L2，超 72h 自动进 BPM）/ 升级 L3 待触发</p>
-      <h3>澄清条目 · 8 条 · 未闭环 {CLARS.filter(c => c.status === '待答复').length}</h3>
+    </section>
+    <section className="p9-card"><h3>澄清条目 · {CLARS.length} 条 · 未闭环 {CLARS.filter(c => c.status === '待答复').length}</h3>
       <div className="p9-row">{(['全部', '未闭环', '已进标书'] as const).map(f => <button key={f} className={'p9-btn ' + (clarFilter === f ? 'primary' : 'soft')} onClick={() => setClarFilter(f)}>{f}</button>)}<button className="p9-btn soft">新建</button></div>
       <table className="p9-table"><thead><tr><th>类型</th><th>来源</th><th>问题</th><th>责任方</th><th>截止</th><th>状态</th><th>是否已进标书</th></tr></thead>
         <tbody>{CLARS.filter(c => clarFilter === '全部' || (clarFilter === '未闭环' && c.status === '待答复') || (clarFilter === '已进标书' && c.inBid)).map((c, i) => <tr key={i}><td>{c.type}</td><td>{c.dir}</td><td>{c.q}</td><td>{c.owner}</td><td>{c.due}</td><td>{c.status}</td><td>{c.inBid ? '已进标书' : '未闭环'}</td></tr>)}</tbody></table>
@@ -365,13 +374,14 @@ export function P9Workspace({ api, user }: { api: (p: string, o?: Any) => Promis
   );
   // ============ P9.8 交标与结果（含检查报告）===========
   const submitBody = (
-    <div><section className="p9-card"><h3>交标与结果</h3>
+    <div><h3>交标与结果</h3>
       <p className="p9-muted">AI 每 30 分钟自动核查一次{checkRun ? ' · 已复跑核查' : ''}</p>
-      <div className={'p9-item ' + (checkPass ? 'ok' : 'warn')}><b>AI 交标体检 · 检查报告</b><p>齐备性 5 项已自动核对（3 项核验通过 / 2 项待核验）；最新版本一致性核查发现 3 项偏差未闭环 —— 建议先关偏差，再上传交标凭证。</p><p><b>风险：中 · {checkPass ? '可交标' : '不建议现在交标'}</b> · 流水线：{PIPELINE_LABEL[pipe]}</p></div>
-      <h4>提交前检查 · 四源汇总（商务标 v2 · 技术标 v3 · 报价表 v1）</h4>
+      <div className="p9-submit-strip"><b>AI 交标体检</b><span className="p9-muted">风险：中 · {checkPass ? '可交标' : '不建议现在交标'} · 流水线：{PIPELINE_LABEL[pipe]}</span></div>
+      <section className="p9-card"><h4>提交前检查 · 四源汇总（商务标 v2 · 技术标 v3 · 报价表 v1）</h4>
+      <p>齐备性 5 项已自动核对（3 项核验通过 / 2 项待核验）；最新版本一致性核查发现 3 项偏差未闭环 —— 建议先关偏差，再上传交标凭证。</p>
       {CHECKS.map(c => <div key={c.src} className="p9-item"><b>{c.src}</b><p>{c.detail}</p><span className="p9-pill">{c.state === '待检查' ? '待检查' : '不通过 · ' + c.state}</span></div>)}
-      <p>人工复查：王强（技术负责人）· {pipe === 'review' || pipe === 'submitted' ? '已签字' : '待签字'} —— AI 只做检查，逐项确认后进入标书定稿</p>
-      <h4>交标前 AI 最终检查清单 · 齐备性自动核对 · 不再人工勾选 · 3 / 5 已核验</h4>
+      <p>人工复查：王强（技术负责人）· {pipe === 'review' || pipe === 'submitted' ? '已签字' : '待签字'} —— AI 只做检查，逐项确认后进入标书定稿</p></section>
+      <section className="p9-card"><h4>交标前 AI 最终检查清单 · 齐备性自动核对 · 不再人工勾选 · 3 / 5 已核验</h4>
       <ul><li>投标保证金 500 万元 · 保函编号 BZ-2026-0193，已缴纳 / 保函已开 → 已核验</li><li>份数 正本 1 份 · 副本 4 份 · 电子件（U 盘）齐备 → 已核验</li><li>递交方式与地点 现场递交 · 宁德市公共资源交易中心 · 递交人 李明 → 已核验</li><li>签字与密封 需检查骑缝章与法人章，密封与签章须符合招标要求 → 待核验</li><li>交标凭证 上传后节点 ⑦ 自动完成，并回写交标时间 → 待核验</li></ul>
       <div className="p9-row">
         <button className="p9-btn soft" onClick={async () => { await call('/bids/' + bid.id + '/ai/check', 'POST', {}); setCheckRun(true); setPipe('checking'); notify('AI 已复跑核查（POST /api/bids/:id/ai/check）。'); }}>AI 复跑核查</button>
@@ -384,17 +394,16 @@ export function P9Workspace({ api, user }: { api: (p: string, o?: Any) => Promis
   );
   // ============ P9.9 BAFO 对比（只做差异呈现，无权限看锁定占位，不含金额）===========
   const bafoBody = (
-    <div><section className="p9-card"><div className="p9-row"><h3>BAFO 对比</h3><span className="p9-muted">最终版 = 最新技术方案 v3 + 报价单 v3（严格权限）</span>
-      {demo && (<label>当前查看角色 <select value={quoteRole} onChange={e => setQuoteRole(e.target.value)}><option>SPP PM</option><option>SLS</option><option>SC</option><option>财务</option><option>其他成员</option></select></label>)}
-      <button className="p9-btn soft" onClick={() => notify('提交最终版（演示）：状态变化原型未明确，未实际提交。')}>提交最终版</button><button className="p9-btn soft" onClick={async () => { await call('/bids/' + bid.id + '/bafo/rounds', 'POST', {}); notify('已开启新一轮（演示）。'); }}>开启新一轮</button></div>
-      <table className="p9-table"><thead><tr><th>轮次</th><th>版本</th><th>关键差异</th><th>结论</th></tr></thead>
-        <tbody>{BAFO_ROUNDS.map(r => <tr key={r.r}><td>{r.r}</td><td>{r.time}</td><td>{r.diff}</td><td>{r.concl}</td></tr>)}</tbody></table>
-      <h4>AI 字段级差异 · R1 → R2 · 仅列差异项，相同字段不展示 · {BAFO_DIFFS.length} 处差异（由差异行算出）</h4>
+    <div><div className="p9-bafo-actions"><div className="p9-row"><h3>BAFO 对比</h3><span className="p9-muted">最终版 = 最新技术方案 v3 + 报价单 v3（严格权限）</span>
+      {demo && (<label>当前查看角色 <select value={quoteRole} onChange={e => setQuoteRole(e.target.value)}><option>SPP PM</option><option>SLS</option><option>SC</option><option>财务</option><option>其他成员</option></select></label>)}</div><div className="p9-row"><button className="p9-btn soft" onClick={() => notify('提交最终版（演示）：状态变化原型未明确，未实际提交。')}>提交最终版</button><button className="p9-btn soft" onClick={async () => { await call('/bids/' + bid.id + '/bafo/rounds', 'POST', {}); notify('已开启新一轮（演示）。'); }}>开启新一轮</button></div></div>
+      <section className="p9-card"><table className="p9-table"><thead><tr><th>轮次</th><th>版本</th><th>关键差异</th><th>结论</th></tr></thead>
+        <tbody>{BAFO_ROUNDS.map(r => <tr key={r.r}><td>{r.r}</td><td>{r.time}</td><td>{r.diff}</td><td>{r.concl}</td></tr>)}</tbody></table></section>
+      <section className="p9-card"><h4>AI 字段级差异 · R1 → R2 · 仅列差异项，相同字段不展示 · {BAFO_DIFFS.length} 处差异（由差异行算出）</h4>
       <table className="p9-table"><thead><tr><th>字段</th><th>旧值</th><th>→</th><th>新值</th><th>状态</th></tr></thead>
         <tbody>{BAFO_DIFFS.map(d => <tr key={d.f}><td>{d.f}</td><td>{d.old}</td><td>→</td><td>{d.next}</td><td>{d.state}</td></tr>)}</tbody></table>
       <p className="p9-hint">AI 逐字段比对 · 只呈现差异，不给定价建议；AI 仅记录差异与流程，不评估价格影响；付款节点差异待业务确认。本屏不做优劣判断、不做价格评分/排序/区间建议、不含金额。</p>
-      <button className="p9-btn soft">查看版本文件</button><button className="p9-btn soft">导出差对比</button>
-      <h4>报价单权限 · 严格管控 · 仅 2 角色可见</h4>
+      <button className="p9-btn soft">查看版本文件</button><button className="p9-btn soft">导出差对比</button></section>
+      <section className="p9-card p9-card-14"><h4>报价单权限 · 严格管控 · 仅 2 角色可见</h4>
       {!demo ? (<div className="p9-item"><b>🔒 已报价</b><p>报价内容仅 admin 与投标 pricingTeam 成员可见（以后端校验为准）；当前登录角色：{user?.role || '—'} · 本界面不展示金额、不提供下载。</p></div>) : (quoteRole === 'SPP PM' || quoteRole === 'SLS') ? (
         <div className="p9-item"><p>报价单 v3（{quoteRole === 'SPP PM' ? '可见 · 可编辑 · 可下载' : '可见 · 只读 · 下载需审批'}）· 版本与字段信息可见，金额不在本演示界面展示。</p><button className="p9-btn soft" onClick={() => notify(quoteRole === 'SLS' ? '下载需审批（待审批），全部操作留痕。' : '下载已通过审批并加水印，全部操作留痕。')}>下载报价单</button></div>
       ) : (
@@ -411,11 +420,11 @@ export function P9Workspace({ api, user }: { api: (p: string, o?: Any) => Promis
         <p>AI 归因：价格（同类项目我司均价高于中标方约 6%）与强制响应缺失是主因；评标反馈未提交付与售后失分，说明本次竞争的主战场是技术与价格。中标时本块自动切换为赢单原因分析。</p>
         <textarea placeholder="补充说明（选填）：评标现场问答要点、客户口头反馈…" />
         <button className="p9-btn primary" onClick={async () => { await call('/bids/' + bid.id + '/close', 'POST', { reason: reviewReason }); setReviewConfirmed(true); notify('复盘已确认，结论归档。'); }}>确认复盘结论</button></div>
-        <div className="p9-item"><b>定标结论小卡（补齐：原型仅标题）</b><p>结论：落标 · 原因：{reviewReason} · 状态：{reviewConfirmed ? '已确认归档' : '草稿待确认'}</p><p>合同 register 可带入 3 项偏差：消防认证 / 质保口径 10 年 / 付款节点 3-3-4</p><button className="p9-btn soft">查看合同 register</button></div></div>
-      <h4>经验沉淀 · 3 条 Lesson · 确认后写入案例库 · 同步竞对库</h4>
+        <div className="p9-item"><b>定标结论小卡（补齐：原型仅标题）</b><p>结论：落标 · 原因：{reviewReason} · 状态：{reviewConfirmed ? '已确认归档' : '草稿待确认'}</p><p>合同 register 可带入 3 项偏差：消防认证 / 质保口径 10 年 / 付款节点 3-3-4</p><button className="p9-btn soft">查看合同 register</button></div></div></section>
+      <section className="p9-card"><h4>经验沉淀 · 3 条 Lesson · 确认后写入案例库 · 同步竞对库</h4>
       {LESSONS.map((l, i) => <div key={l.t} className="p9-item"><b>{i + 1} {l.t}</b><p>{l.d}</p><button className="p9-btn soft" onClick={() => notify('已写入案例库（演示）。')}>写入案例库</button></div>)}
-      <p className="p9-hint">3 条 Lesson 均已预生成 · 确认后归档</p>
-      <h4>沉淀去向 · 结论归档后自动生成</h4><ul><li>案例库：本标过程、标书亮点与缺口结构化归档 → 待生成</li><li>竞对库：本标 5 家竞对格局、报价区间与评标反馈 → 待更新</li><li>评标反馈：客户评标意见与失分项逐条录入 → 待归档</li><li>合同 register：3 项偏差自动带入 → 查看 / 可带入</li></ul>
+      <p className="p9-hint">3 条 Lesson 均已预生成 · 确认后归档</p></section>
+      <section className="p9-card"><h4>沉淀去向 · 结论归档后自动生成</h4><ul><li>案例库：本标过程、标书亮点与缺口结构化归档 → 待生成</li><li>竞对库：本标 5 家竞对格局、报价区间与评标反馈 → 待更新</li><li>评标反馈：客户评标意见与失分项逐条录入 → 待归档</li><li>合同 register：3 项偏差自动带入 → 查看 / 可带入</li></ul>
       <button className="p9-btn soft">导出复盘报告</button>
     </section></div>
   );
