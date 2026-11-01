@@ -209,12 +209,13 @@ export function Plan() {
   const scroller = useRef<HTMLDivElement>(null);
   const stageRows = D.STAGES.map(st => ({ ...st, start: addDays(D.PLAN_START, st.start), end: addDays(D.PLAN_START, st.start + st.len - 1) }));
   const tl = makeTimeline(stage ? stageRows : rows, pad, dayW, live?.today || '2026-10-24');
-  const leftCols = stage ? '170px 76px 84px 60px' : mode === 'edit' ? '210px 84px 84px 66px 92px 16px' : '180px 70px 84px 60px';
-  const leftW = leftCols.split(' ').reduce((n, c) => n + parseInt(c, 10), 0) + (leftCols.split(' ').length - 1) * 6 + 24;
-  const gridStyle = { '--left': leftCols, gridTemplateColumns: `${leftW}px ${tl.days * dayW}px` } as React.CSSProperties;
+  const leftCols = stage ? '186px 76px 84px 60px 92px' : mode === 'edit' ? '222px 84px 84px 66px 92px 16px' : '196px 70px 84px 60px 92px';
+  const leftW = leftCols.split(' ').reduce((n, c) => n + parseInt(c, 10), 0) + (leftCols.split(' ').length - 1) * 6;
+  // 只固定首列（拆解条目 / 阶段），其余信息列与时间轴一起横向滚动
+  const gridStyle = { gridTemplateColumns: `${leftCols} ${tl.days * dayW}px` } as React.CSSProperties;
   const span = (stage ? stageRows : rows);
   const planRange = span.length ? `${mmdd([...span].map(r => r.start).sort()[0]).replace('-', '/')} – 11/05` : '—';
-  const toToday = () => { const el = scroller.current; if (el) el.scrollTo({ left: Math.max(0, diffDays(tl.start, tl.today) * dayW - (el.clientWidth - leftW) / 2), behavior: 'smooth' }); };
+  const toToday = () => { const el = scroller.current; if (el) el.scrollTo({ left: Math.max(0, leftW + diffDays(tl.start, tl.today) * dayW - el.clientWidth / 2), behavior: 'smooth' }); };
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   // 行上下拖拽排序：拖左侧把手，落在目标行上即插到该行之前
@@ -280,7 +281,7 @@ export function Plan() {
         <GanttTools pad={pad} setPad={setPad} dayW={dayW} setDayW={setDayW} onToday={toToday} />
         <div className="p9-gantt-scroll" ref={scroller}>
           <div className="p9-gr is-head" style={gridStyle}>
-            <div className="p9-gl">{['阶段', '负责人', '参与人', '状态'].map(h => <div key={h} className="p9-th">{h}</div>)}</div>
+            <div className="p9-gl">{['阶段', '负责人', '参与人', '状态', '起止'].map(h => <div key={h} className="p9-th">{h}</div>)}</div>
             <Weeks tl={tl} />
           </div>
           {stageRows.map(s => (
@@ -289,6 +290,7 @@ export function Plan() {
                 <div className="p9-gantt-name"><i className={'p9-dot tone-' + ST_TONE[s.status]} /><b>{s.name}</b><span className="p9-grow" /><RoundTag round={s.round} /></div>
                 <div className="p9-td-c is-muted">{s.owner}</div><div className="p9-td-c is-muted">{s.part}</div>
                 <div><Pill tone={ST_TONE[s.status]}>{s.status}</Pill></div>
+                <div className="p9-td-c is-muted p9-mono">{mmdd(s.start)} → {mmdd(s.end)}</div>
               </div>
               <Track tl={tl}><div className={cx('p9-gantt-bar', 'is-stage', 'tone-' + (s.status === '已逾期' ? 'red' : s.status === '进行中' ? 'blue' : 'gray'))}
                 style={{ left: diffDays(tl.start, s.start) * tl.dayW + 1, width: (diffDays(s.start, s.end) + 1) * tl.dayW - 2 }} title={`${cn(s.start)} – ${cn(s.end)}`} /></Track>
@@ -310,7 +312,7 @@ export function Plan() {
           <div className={cx('p9-gantt-scroll', mode === 'edit' && 'is-edit')} ref={scroller}
             onKeyDown={e => { if (mode !== 'edit') return; if (e.key === 'Enter') { setPlan(draft); setMode('view'); notify('计划已保存'); } if (e.key === 'Escape') { setDraft(plan); setMode('view'); } }}>
             <div className="p9-gr is-head" style={gridStyle}>
-              <div className="p9-gl">{['拆解条目', '负责人', '参与人', '状态', ...(mode === 'edit' ? ['起止', ''] : [])].map((h, i) => <div key={i} className="p9-th">{h}</div>)}</div>
+              <div className="p9-gl">{['拆解条目', '负责人', '参与人', '状态', '起止', ...(mode === 'edit' ? [''] : [])].map((h, i) => <div key={i} className="p9-th">{h}</div>)}</div>
               <Weeks tl={tl} />
             </div>
             {rows.map(it => mode === 'edit' ? (
@@ -331,6 +333,7 @@ export function Plan() {
                   <div className={cx('p9-gantt-name', it.status === '已逾期' && 'tone-red')}>{grip(it.id)}<i className={'p9-dot tone-' + (it.status === '已逾期' ? 'red' : BAR[it.cat])} /><span>{it.title}</span><span className="p9-grow" /><RoundTag round={it.round} /></div>
                   <div className="p9-td-c is-muted">{it.owner || '未派'}</div><div className="p9-td-c is-muted">{it.part}</div>
                   <div><Pill tone={ST_TONE[it.status]}>{it.status}</Pill></div>
+                  <div className="p9-td-c is-muted p9-mono">{mmdd(it.start)} → {mmdd(it.end)}</div>
                 </div>
                 <Bar item={it} editable={false} tl={tl} onChange={(a, b) => reschedule(it, a, b)} />
               </div>
