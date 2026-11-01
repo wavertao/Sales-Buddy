@@ -71,7 +71,7 @@ export function DetailHeader({ right }: { right?: React.ReactNode }) {
         </div>
         <div className="p9-topbar-right">
           {right ?? <>
-            <span className="p9-time-pill"><Clock3 size={11} />距开标 {daysLeft} 天</span>
+            <span className="p9-time-pill"><Clock3 size={11} />{daysLeft >= 0 ? `距开标 ${daysLeft} 天` : `已过开标 ${-daysLeft} 天`}</span>
             <button type="button" className={cx('p9-ai-btn', dockOpen && 'is-on')} onClick={() => setDockOpen(!dockOpen)} aria-pressed={dockOpen}><Sparkles size={13} />和纵横对话</button>
             <button type="button" className="p9-group-btn" onClick={async () => { const r = await call(`/bids/${encodeURIComponent(bid.id)}/group`, 'POST', {}); notify(r?.url ? '已建群：' + r.url : '已发起建群：SPP 团队 6 人已拉入钉钉群'); }}><Users size={13} />一键建群</button>
           </>}
@@ -80,7 +80,7 @@ export function DetailHeader({ right }: { right?: React.ReactNode }) {
       <div className="p9-nodebar">
         {D.NODES.map((n, i) => {
           const state = i < node ? 'done' : i === node ? 'now' : 'todo';
-          const date = i === node ? `剩 ${daysLeft} 天` : D.NODE_DATES[i] === '剩 12 天' ? '10-14' : D.NODE_DATES[i];
+          const date = i === node ? (daysLeft >= 0 ? `剩 ${daysLeft} 天` : `超期 ${-daysLeft} 天`) : D.NODE_DATES[i] === '剩 12 天' ? '10-14' : D.NODE_DATES[i];
           return (
             <button type="button" key={n} className={cx('p9-node', 'is-' + state)} disabled={state === 'todo'}
               onClick={() => setModal(i === node ? { kind: 'advance' } : { kind: 'rollback', to: i })}
