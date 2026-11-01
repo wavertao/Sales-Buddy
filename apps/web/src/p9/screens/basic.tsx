@@ -1,9 +1,9 @@
 // P9.2.1 基本信息（ATB 评审表 + 投标轮次）· P9.2.2 投标策略 · P9.2.3 节点推进确认弹窗
 import React, { useState } from 'react';
-import { Check, ChevronDown, ChevronRight, ChevronsRight, ClipboardList, Mic, RefreshCw, Sparkles, Target, ArrowRight } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, ChevronsRight, ClipboardList, Mic, RefreshCw, Sparkles, Target, ArrowRight, Undo2, TriangleAlert, PenLine } from 'lucide-react';
 import * as D from '../demo';
 import { useP9 } from '../store';
-import { Btn, Card, Pill, SectionHead, cx } from '../ui';
+import { Btn, Card, Modal, Pill, SectionHead, cx } from '../ui';
 
 function YesNo({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -29,15 +29,15 @@ function JudgeRows({ rows, initial = true }: { rows: [string, string][]; initial
 }
 
 function Rounds() {
-  const { rounds, advanceRound } = useP9();
+  const { rounds, setModal } = useP9();
   const cur = rounds.findIndex(r => r.state === 'now');
   return (
     <div className="p9-sec">
       <SectionHead name="投标轮次" summary={`当前 ${rounds[cur]?.no} · ${rounds[cur]?.label}｜共 4 轮（首轮 / 次轮 / 短名单 / 终审），推进后历史轮次保留只读`}
-        badge={<><Pill tone="blue">{rounds[cur]?.no} / 4</Pill><Btn kind="primary" size="sm" iconRight={ChevronRight} onClick={advanceRound}>推进下一轮</Btn></>} />
+        badge={<><Pill tone="blue">{rounds[cur]?.no} / 4</Pill><Btn kind="outline" size="sm" icon={Undo2} disabled={cur <= 0} onClick={() => setModal({ kind: 'round', dir: 'back' })}>回退上一轮</Btn><Btn kind="primary" size="sm" iconRight={ChevronRight} disabled={cur >= rounds.length - 1} onClick={() => setModal({ kind: 'round', dir: 'next' })}>推进下一轮</Btn></>} />
       <div className="p9-rounds">
         {rounds.map((r, i) => (
-          <button type="button" key={r.no} className={cx('p9-round-card', 'is-' + r.state)} disabled={r.state !== 'todo' || i !== cur + 1} onClick={advanceRound}>
+          <button type="button" key={r.no} className={cx('p9-round-card', 'is-' + r.state)} disabled={r.state !== 'todo' || i !== cur + 1} onClick={() => setModal({ kind: 'round', dir: 'next' })}>
             <span className="p9-round-top"><b>{r.no} · {r.label}</b><span className="p9-grow" /><i>{r.state === 'done' ? '已结束' : r.state === 'now' ? '当前轮次' : '待开始'}</i></span>
             <small>{r.date}</small>
             <small className="p9-round-note">{r.note}</small>
@@ -52,13 +52,13 @@ function MultiOpp() {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string[]>(D.OPP_NAME_CHOICES);
   return (
-    <span className="p9-field-box is-multi" onClick={() => setOpen(!open)}>
+    <span className={cx('p9-field-box is-multi', open && 'is-open')} onClick={() => setOpen(!open)} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false); }} tabIndex={0} role="combobox" aria-expanded={open}>
       {picked[0] && <span className="p9-chip-sel">{picked[0]}</span>}
       {picked.length > 1 && <b className="p9-more">+{picked.length - 1}</b>}
-      <span className="p9-grow" /><ChevronDown size={11} />
+      <span className="p9-grow" /><ChevronDown size={11} className={cx(open && 'rot-180')} />
       {open && <span className="p9-dropdown" onClick={e => e.stopPropagation()}>
         {D.OPP_NAME_CHOICES.map(o => (
-          <label key={o}><input type="checkbox" checked={picked.includes(o)} onChange={() => setPicked(p => p.includes(o) ? p.filter(x => x !== o) : [...p, o])} />{o}</label>
+          <button type="button" key={o} className={cx('p9-opt', picked.includes(o) && 'is-on')} onClick={() => setPicked(p => p.includes(o) ? p.filter(x => x !== o) : [...p, o])}><span className={cx('p9-optbox', picked.includes(o) && 'is-on')}>{picked.includes(o) && <Check size={9} strokeWidth={3} />}</span><span>{o}</span></button>
         ))}
       </span>}
     </span>
@@ -118,48 +118,64 @@ export function Strategy() {
   const [adopted, setAdopted] = useState(true);
   const [regen, setRegen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [dir, setDir] = useState(D.AI_DIRECTION);
+  // 已保存的策略内容 + 编辑中的草稿；取消时丢弃草稿
+  const init = { judge: D.STRATEGY_JUDGE, fields: D.STRATEGY_FIELDS, sections: D.STRATEGY_SECTIONS, dir: D.AI_DIRECTION };
+  const [saved, setSaved] = useState(init);
+  const [draft, setDraft] = useState(init);
+  const cur = editing ? draft : saved;
+  const setAt = <K extends keyof typeof init>(key: K, i: number, col: number, v: string) =>
+    setDraft(d => ({ ...d, [key]: (d[key] as string[][]).map((row, j) => j === i ? row.map((x, c) => c === col ? v : x) : row) }));
   const regenerate = async () => {
     setRegen(true);
     await call(`/bids/${encodeURIComponent(bid.id)}/strategy/regenerate`, 'POST', { reason: '手动再生成' });
     setTimeout(() => { setRegen(false); setAdopted(false); notify('AI 已按三段策略重新生成方向，待你采用'); }, 600);
   };
+  const save = async () => {
+    setSaved(draft); setEditing(false);
+    await call(`/bids/${encodeURIComponent(bid.id)}/strategy`, 'PUT', { scope: draft.judge[0][1], customer: draft.judge[1][1], competition: draft.judge[2][1] });
+    notify('投标策略已保存，已归档到投标实体');
+  };
+  const text = (key: 'judge' | 'dir', i: number, v: string) => editing
+    ? <textarea className="p9-inline-input is-area" rows={1} value={v} onChange={e => setAt(key, i, 1, e.target.value)} />
+    : <span>{v}</span>;
   return (
-    <Card icon={Target} title="投标策略" hint="三段模板化录入 · 归档到投标实体；AI 据此生成策略方向" right={<Pill tone={adopted ? 'green' : 'orange'}>{adopted ? '已归档' : '待采用'}</Pill>}>
+    <Card icon={Target} title="投标策略" hint="三段模板化录入 · 归档到投标实体；AI 据此生成策略方向"
+      right={<>
+        <Pill tone={editing ? 'orange' : adopted ? 'green' : 'orange'}>{editing ? '编辑中 · 未保存' : adopted ? '已归档' : '待采用'}</Pill>
+        {editing ? <>
+          <Btn kind="outline" size="sm" onClick={() => { setDraft(saved); setEditing(false); }}>取消</Btn>
+          <Btn kind="primary" size="sm" icon={Check} onClick={() => void save()}>保存</Btn>
+        </> : <>
+          <Btn kind="outline" size="sm" icon={PenLine} onClick={() => { setDraft(saved); setEditing(true); setOpen({ 报价策略: true, 技术策略: true, 服务策略: true, 团队分工: true }); }}>编辑</Btn>
+          <Btn kind="primary" size="sm" icon={Check} disabled={adopted} onClick={() => { setAdopted(true); notify('已采用此方向，策略单已归档到投标实体'); }}>{adopted ? '已采用此方向' : '采用此方向'}</Btn>
+        </>}
+      </>}>
       <div className="p9-secs">
         <div className="p9-sec">
           <SectionHead name="投标策略判断" summary="3 项判断 · 三段模板化录入" bar="purple" badge={<button type="button" className="p9-link" onClick={() => notify('模板：招标范围（范围 / 容量 / 排除项）· 对客策略（决策链 / 价值主线）· 竞争策略（对手 / 差异化）')}>查看模板<ChevronRight size={10} /></button>} />
-          <JudgeRows rows={D.STRATEGY_JUDGE} />
+          <div className="p9-judge">{cur.judge.map(([k, v], i) => <div key={k} className="p9-judge-row"><b>{k}</b>{text('judge', i, v)}<YesNo value onChange={() => undefined} /></div>)}</div>
         </div>
         <div className="p9-sec">
-          <SectionHead name="策略字段" summary="12 项 · 已归档到投标实体" progress={{ done: 12, total: 12 }}
+          <SectionHead name="策略字段" summary="12 项 · 已归档到投标实体" progress={{ done: cur.fields.filter(f => f[1]).length, total: 12 }}
             action={<>{fold ? '展开' : '收起'}{fold ? <ChevronRight size={10} /> : <ChevronDown size={10} className="rot-180" />}</>} onAction={() => setFold(!fold)} />
-          {!fold && <div className="p9-fields">{D.STRATEGY_FIELDS.map(([k, v]) => (
-            <label key={k} className="p9-field"><span className="p9-field-label">{k}</span><span className="p9-field-box"><input defaultValue={v} /></span></label>
+          {!fold && <div className="p9-fields">{cur.fields.map(([k, v], i) => (
+            <label key={k} className="p9-field"><span className="p9-field-label">{k}</span><span className={cx('p9-field-box', !editing && 'is-readonly')}><input value={v} readOnly={!editing} onChange={e => setAt('fields', i, 1, e.target.value)} /></span></label>
           ))}</div>}
         </div>
-        {D.STRATEGY_SECTIONS.map(([k, s, detail]) => (
+        {cur.sections.map(([k, sum, detail], i) => (
           <div key={k} className="p9-sec">
-            <SectionHead name={k} summary={s} bar="gray" action={<>{open[k] ? '收起' : '展开'}{open[k] ? <ChevronDown size={10} className="rot-180" /> : <ChevronRight size={10} />}</>} onAction={() => setOpen(o => ({ ...o, [k]: !o[k] }))} />
-            {open[k] && <p className="p9-sec-text">{detail}</p>}
+            <SectionHead name={k} summary={sum} bar="gray" action={<>{open[k] ? '收起' : '展开'}{open[k] ? <ChevronDown size={10} className="rot-180" /> : <ChevronRight size={10} />}</>} onAction={() => setOpen(o => ({ ...o, [k]: !o[k] }))} />
+            {open[k] && (editing ? (
+              <div className="p9-sec-edit">
+                <label className="p9-field"><span className="p9-field-label">摘要</span><span className="p9-field-box"><input value={sum} onChange={e => setAt('sections', i, 1, e.target.value)} /></span></label>
+                <label className="p9-field"><span className="p9-field-label">详细说明</span><span className="p9-textarea"><textarea value={detail} onChange={e => setAt('sections', i, 2, e.target.value)} /></span></label>
+              </div>
+            ) : <p className="p9-sec-text">{detail}</p>)}
           </div>
         ))}
         <div className="p9-sec">
-          <SectionHead name="AI 策略方向" summary="基于上面三段生成 · 仅作方向建议" bar="purple" badge={<button type="button" className="p9-link" onClick={() => void regenerate()}>重新生成<RefreshCw size={10} className={cx(regen && 'spin')} /></button>} />
-          <div className="p9-judge">
-            {dir.map(([k, v], i) => (
-              <div key={k} className="p9-judge-row">
-                <b>{k}</b>
-                {editing ? <input className="p9-inline-input" value={v} onChange={e => setDir(d => d.map((x, j) => j === i ? [x[0], e.target.value] : x))} /> : <span>{v}</span>}
-                <YesNo value onChange={() => undefined} />
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="p9-btn-row">
-          <Btn kind="primary" icon={Check} onClick={() => { setAdopted(true); setEditing(false); notify('已采用此方向，策略单已归档到投标实体'); }}>采用此方向</Btn>
-          <Btn kind="outline" onClick={() => void regenerate()}>再生成</Btn>
-          <Btn kind="outline" onClick={() => { if (editing) { setEditing(false); setAdopted(true); notify('编辑后的方向已保存并归档'); } else setEditing(true); }}>{editing ? '保存修改' : '编辑后保存'}</Btn>
+          <SectionHead name="AI 策略方向" summary="基于上面三段生成 · 仅作方向建议" bar="purple" badge={!editing && <button type="button" className="p9-link" onClick={() => void regenerate()}>重新生成<RefreshCw size={10} className={cx(regen && 'spin')} /></button>} />
+          <div className="p9-judge">{cur.dir.map(([k, v], i) => <div key={k} className="p9-judge-row"><b>{k}</b>{text('dir', i, v)}<YesNo value onChange={() => undefined} /></div>)}</div>
         </div>
       </div>
     </Card>
@@ -194,5 +210,64 @@ export function AdvanceModal() {
         <footer className="p9-modal-foot"><span className="p9-grow" /><Btn kind="outline" size="lg" onClick={() => setModal(null)}>取消</Btn><Btn kind="primary" size="lg" icon={Check} onClick={() => { advanceNode(note); setModal(null); }}>确认推进</Btn></footer>
       </div>
     </div>
+  );
+}
+
+/** 阶段回退确认：点节点条上已完成的节点触发，贴在节点条下方、无遮罩（与推进弹窗同一套样式）。 */
+export function RollbackModal({ to }: { to: number }) {
+  const { node, setModal, rollbackNode } = useP9();
+  const [reason, setReason] = useState('');
+  const lost = D.NODES.slice(to + 1, node + 1);
+  return (
+    <div className="p9-pop-layer" onClick={() => setModal(null)}>
+      <div className="p9-modal is-pop" style={{ width: 520, left: Math.max(0, to * 104 - 60) }} onClick={e => e.stopPropagation()} role="dialog" aria-label="回退到此节点">
+        <header className="p9-modal-head"><Undo2 size={15} className="ic-orange" /><h3>回退到「{D.NODE_NO[to]} {D.NODES[to]}」</h3><span className="p9-grow" /><button type="button" className="p9-modal-x" onClick={() => setModal(null)} aria-label="关闭">×</button></header>
+        <div className="p9-modal-body is-gap12">
+          <div className="p9-flow">
+            <div className="p9-flow-card is-now"><b>{D.NODE_NO[node]} {D.NODES[node]}</b><small>当前节点 · 进行中</small></div>
+            <ArrowRight size={16} className="ic-gray" />
+            <div className="p9-flow-card is-back"><b>{D.NODE_NO[to]} {D.NODES[to]}</b><small>回退后重新转为进行中</small></div>
+          </div>
+          <div className="p9-backwarn">
+            <div className="p9-precheck-head"><TriangleAlert size={12} /><b>回退影响</b></div>
+            <div className="p9-precheck-item">「{lost.join('、')}」将转为待开始，节点完成时间清空</div>
+            <div className="p9-precheck-item">这些节点下已建的待办 / 会议 / 澄清保留，不会删除</div>
+            <div className="p9-precheck-item">回退会写入节点日志，并通知 SPP 团队</div>
+          </div>
+          <div className="p9-mf">
+            <span className="p9-mf-label is-strong">回退原因<i className="p9-req">*</i></span>
+            <span className="p9-textarea"><textarea value={reason} onChange={e => setReason(e.target.value)} placeholder="例如：BSD 审核退回，拆标分解表需按新版招标文件重新拆解" /><Mic size={13} /></span>
+          </div>
+        </div>
+        <footer className="p9-modal-foot"><span className="p9-grow" /><Btn kind="outline" size="lg" onClick={() => setModal(null)}>取消</Btn><Btn kind="danger" size="lg" icon={Undo2} disabled={!reason.trim()} onClick={() => { rollbackNode(to, reason); setModal(null); }}>确认回退</Btn></footer>
+      </div>
+    </div>
+  );
+}
+
+/** 轮次推进 / 回退确认（居中弹窗）。 */
+export function RoundModal({ dir }: { dir: 'next' | 'back' }) {
+  const { rounds, setModal, advanceRound, rollbackRound } = useP9();
+  const [reason, setReason] = useState('');
+  const i = rounds.findIndex(r => r.state === 'now');
+  const cur = rounds[i], target = rounds[dir === 'next' ? i + 1 : i - 1];
+  if (!cur || !target) return null;
+  const back = dir === 'back';
+  return (
+    <Modal icon={back ? Undo2 : ChevronsRight} title={back ? '回退到上一轮' : '推进到下一轮'} width={460} onClose={() => setModal(null)} footer={<>
+      <span className="p9-grow" />
+      <Btn kind="outline" size="lg" onClick={() => setModal(null)}>取消</Btn>
+      <Btn kind={back ? 'danger' : 'primary'} size="lg" icon={back ? Undo2 : Check} disabled={back && !reason.trim()} onClick={() => { back ? rollbackRound(reason) : advanceRound(); setModal(null); }}>{back ? '确认回退' : '确认推进'}</Btn>
+    </>}>
+      <div className="p9-flow">
+        <div className="p9-flow-card is-now"><b>{cur.no} · {cur.label}</b><small>当前轮次</small></div>
+        <ArrowRight size={16} className="ic-gray" />
+        <div className={cx('p9-flow-card', back && 'is-back')}><b>{target.no} · {target.label}</b><small>{back ? '回退后恢复为当前轮次、可编辑' : '推进后成为当前轮次'}</small></div>
+      </div>
+      <p className="p9-modal-tip">{back
+        ? `${cur.no} 下新建的会议 / 待办 / 澄清保留在 ${cur.no}（快照不回写）；${target.no} 解除只读。回退写入操作日志。`
+        : `${cur.no} 下所有对象转为「已结束 · 只读」；新建记录自动挂 ${target.no}。`}</p>
+      {back && <div className="p9-mf"><span className="p9-mf-label is-strong">回退原因<i className="p9-req">*</i></span><span className="p9-textarea"><textarea value={reason} onChange={e => setReason(e.target.value)} placeholder="例如：客户撤回短名单通知，回到次轮补充澄清" /></span></div>}
+    </Modal>
   );
 }

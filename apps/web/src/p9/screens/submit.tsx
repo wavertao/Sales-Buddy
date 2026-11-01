@@ -13,7 +13,13 @@ import type { Tone } from '../ui';
 const SEC_TONE: Record<string, Tone> = { 偏差未闭环: 'red', 待检查: 'orange', 未复查: 'orange', 已通过: 'green' };
 
 export function Submit() {
-  const { notify, setTab, call, bid } = useP9();
+  const { notify, setTab, setTodoId, setClarId, todos, call, bid } = useP9();
+  // 「去处理」直接打开对应待办 / 澄清详情；接口数据里按标题匹配同一条待办
+  const goItem = (s: D.CheckSection, it: NonNullable<D.CheckSection['items']>[number]) => {
+    if (it.clar) { setTab('todos'); setClarId(it.clar); return; }
+    if (it.todo) { const t = todos.find(x => x.id === it.todo) || todos.find(x => it.title.includes(x.title.slice(0, 6))); setTab('todos'); if (t) setTodoId(t.id); return; }
+    setTab(s.key === 'checklist' ? 'files' : 'bafo');
+  };
   const [sections, setSections] = useState(D.CHECK_SECTIONS);
   const [open, setOpen] = useState('todo');
   const [checking, setChecking] = useState(false);
@@ -47,7 +53,7 @@ export function Submit() {
                       <div key={it.title} className="p9-check-item">
                         <i className="p9-dot tone-red" /><b>{it.title}</b><span className="p9-grow" /><small>{it.meta}</small>
                         <button type="button" className="p9-link" onClick={() => notify('已催办：' + it.meta.split(' ')[0])}>催办</button>
-                        <Btn kind="primary" size="sm" onClick={() => setTab(s.key === 'checklist' ? 'files' : s.key === 'req' ? 'bafo' : 'todos')}>去处理</Btn>
+                        <Btn kind="primary" size="sm" onClick={() => goItem(s, it)}>去处理</Btn>
                       </div>
                     ))}
                     {s.note && <small className="p9-check-note">{s.note}</small>}
@@ -87,7 +93,7 @@ export function Submit() {
 }
 
 export function Bafo() {
-  const { notify, live, rounds, advanceRound } = useP9();
+  const { notify, live, rounds } = useP9();
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
   const [submitted, setSubmitted] = useState(false);
   const pending = D.BAFO_DIFFS.filter(d => !d.ok && !confirmed.has(d.f)).length;
@@ -99,7 +105,6 @@ export function Bafo() {
       <section className="p9-card p9-final-bar">
         <span className="p9-final-text">最终版 = 最新技术方案 v3 + 报价单 v3（严格权限）</span><span className="p9-grow" />
         <Btn kind="primary" size="lg" icon={Send} disabled={submitted || locked} onClick={() => { setSubmitted(true); notify('最终版已提交：技术方案 v3 + 报价单 v3，报价单按权限分发'); }}>{submitted ? '已提交最终版' : '提交最终版'}</Btn>
-        <Btn kind="ghost" size="lg" icon={Plus} onClick={advanceRound}>开启新一轮</Btn>
       </section>
       <Card icon={GitCompare} title="BAFO 版本差异对比" hint="AI 逐字段比对 · 只呈现差异，不给定价建议" right={<Pill tone="blue">当前 {cur?.no} · {cur?.no === 'R2' ? '短名单' : cur?.label}</Pill>}
         footer={<><span>R1 → R2 共 3 处差异 · 版本与流程记录已归档</span><button type="button" className="p9-link" onClick={() => notify(locked ? '报价版本文件仅 SPP PM / SLS 可见' : '已打开版本文件：技术方案 v1–v3 · 报价单 v1–v3')}>查看版本文件<ChevronRight size={10} /></button></>} flush>

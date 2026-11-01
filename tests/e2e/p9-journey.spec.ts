@@ -18,7 +18,16 @@ test('P9 投标全流程：列表→驾驶舱→计划→待办完成→BAFO 权
   await page.getByRole('button', { name: '投标全流程' }).click();
   await page.getByRole('button', { name: /BID-20261010-003/ }).first().click();
   await expect(page.getByText('AI 投标驾驶舱')).toBeVisible();
+  // 投标助理默认收起，点「和纵横对话」展开
+  await expect(page.getByText('投标助理')).toHaveCount(0);
+  await page.getByRole('button', { name: '和纵横对话' }).click();
   await expect(page.getByText('投标助理').first()).toBeVisible();
+  await page.getByRole('button', { name: '收起投标助理' }).click();
+
+  // 节点条只做推进 / 回退：点已完成节点弹回退确认，不跳 Tab
+  await page.getByTitle('回退到「投标策略」').click();
+  await expect(page.getByRole('dialog', { name: '回退到此节点' })).toBeVisible();
+  await page.getByRole('button', { name: '取消' }).click();
 
   // 计划：条目级甘特
   await page.getByRole('tab', { name: '计划', exact: true }).click();

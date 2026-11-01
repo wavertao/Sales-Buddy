@@ -1,6 +1,6 @@
 // P9.7 待办与澄清：列表（勾选 / 评论 / 详情）· 待办详情（完成结果 + 评论时间线）· 完成确认弹层 · 评论弹层
 import React, { useRef, useState } from 'react';
-import { ArrowLeft, ArrowUp, AtSign, BellRing, Check, ChevronRight, CircleCheck, CircleCheckBig, CloudUpload, FileText, ListTodo, MessageSquare, Mic, Paperclip, PenLine, Plus, RotateCcw, Smile, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, AtSign, BellRing, Check, ChevronRight, CircleCheck, CircleCheckBig, CloudUpload, FileText, ListTodo, MessageSquare, Mic, Paperclip, PenLine, Plus, RotateCcw, Smile, Trash2, X } from 'lucide-react';
 import * as D from '../demo';
 import { useP9 } from '../store';
 import { Avatar, Btn, Check as Checkbox, Modal, Pill, RoundTag, cx } from '../ui';
@@ -13,9 +13,10 @@ function Chips({ value, onChange, counts }: { value: string; onChange: (v: strin
 }
 
 export function Todos() {
-  const { todos, clars, todoId, setTodoId, setModal, notify, user } = useP9();
+  const { todos, clars, todoId, setTodoId, setModal, notify, user, clarComments, clarId, setClarId } = useP9();
   const [tf, setTf] = useState(() => todos.some(t => t.mine) ? '我的' : '全部');
   const [cf, setCf] = useState('全部');
+  if (clarId) return <ClarDetail clar={clars.find(c => c.id === clarId) || clars[0]} onBack={() => setClarId(null)} />;
   if (todoId) return <TodoDetail todo={todos.find(t => t.id === todoId) || todos[0]} onBack={() => setTodoId(null)} />;
   const overdue = todos.filter(t => t.overdue && !isDone(t));
   const tRows = todos.filter(t => tf === '全部' || (tf === '我的' ? t.mine : t.overdue && !isDone(t)));
@@ -62,11 +63,11 @@ export function Todos() {
               <div className="p9-td-c is-center"><Pill tone={c.type === '技术' ? 'blue' : c.type === '商务' ? 'purple' : 'green'} shape="tag">{c.type}</Pill></div>
               <div className="p9-td-c is-center"><RoundTag round={c.round} /></div>
               <div className="p9-td-c is-muted p9-mono">{c.dir}</div>
-              <div className="p9-td-c is-ellipsis">{c.q}</div>
+              <button type="button" className="p9-todo-title is-normal" onClick={() => setClarId(c.id)}>{c.q}</button>
               <div className="p9-td-c">{c.owner}</div>
               <div className="p9-td-c tone-green p9-mono">{c.due}</div>
               <div className={cx('p9-td-c is-bold', c.status === '待答复' ? 'tone-orange' : 'tone-green')}>{c.status}</div>
-              <div className="p9-row-ops"><span className="p9-cmt"><MessageSquare size={10} />{c.comments}</span><span className="p9-go"><ChevronRight size={11} /></span></div>
+              <div className="p9-row-ops"><button type="button" className="p9-cmt" onClick={() => setModal({ kind: 'clarComment', clarId: c.id })} aria-label="评论"><MessageSquare size={10} />{(clarComments[c.id] || []).filter(x => !x.system).length}</button><button type="button" className="p9-go" onClick={() => setClarId(c.id)} aria-label="查看详情"><ChevronRight size={11} /></button></div>
             </div>
           ))}
         </div>
@@ -76,29 +77,48 @@ export function Todos() {
   );
 }
 
-function CommentList({ comments }: { comments: D.Comment[] }) {
+/** 评论列表：系统动态灰字；人工评论可删除（index 为原数组下标）。 */
+function CommentList({ comments, hideSystem, onDelete }: { comments: D.Comment[]; hideSystem?: boolean; onDelete?: (index: number) => void }) {
+  const [confirm, setConfirm] = useState<number | null>(null);
+  if (!comments.some(c => !hideSystem || !c.system)) return <div className="p9-empty-row">还没有评论，写下第一条吧</div>;
   return (
     <div className="p9-comments">
-      {comments.map((c, i) => c.system ? (
+      {comments.map((c, i) => c.system ? (hideSystem ? null :
         <div key={i} className="p9-cmt-sys"><i />系统 · {c.time}　{c.text}</div>
       ) : (
         <div key={i} className="p9-cmt-row">
           <Avatar name={c.who} tone={AV[c.who] || 'purple'} size={24} />
-          <div className="p9-grow"><div className="p9-cmt-meta"><b>{c.who}</b><small>{c.time}</small></div><p>{c.text}</p></div>
+          <div className="p9-grow">
+            <div className="p9-cmt-meta"><b>{c.who}</b><small>{c.time}</small><span className="p9-grow" />
+              {onDelete && (confirm === i
+                ? <span className="p9-cmt-confirm">删除这条评论？<button type="button" className="tone-red" onClick={() => { onDelete(i); setConfirm(null); }}>删除</button><button type="button" onClick={() => setConfirm(null)}>取消</button></span>
+                : <button type="button" className="p9-cmt-del" onClick={() => setConfirm(i)} aria-label="删除评论"><Trash2 size={11} /></button>)}
+            </div>
+            <p>{c.text}</p>
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-function TodoDetail({ todo, onBack }: { todo: D.Todo; onBack: () => void }) {
-  const { reopenTodo, commentTodo, setModal, notify } = useP9();
+function CommentInput({ onSend, placeholder = '写评论，@ 可提醒同事…' }: { onSend: (text: string) => void; placeholder?: string }) {
   const [text, setText] = useState('');
+  const send = () => { if (!text.trim()) return; onSend(text.trim()); setText(''); };
+  return (
+    <div className="p9-comment-input">
+      <label><input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') send(); }} placeholder={placeholder} /><Mic size={12} /></label>
+      <button type="button" className="p9-send is-lg" onClick={send} disabled={!text.trim()} aria-label="发送"><ArrowUp size={14} /></button>
+    </div>
+  );
+}
+
+function TodoDetail({ todo, onBack }: { todo: D.Todo; onBack: () => void }) {
+  const { reopenTodo, commentTodo, deleteComment, setModal, notify } = useP9();
   const done = isDone(todo);
   const x = D.TODO_DETAIL_EXTRA;
   const res = todo.result;
   const short = todo.title.replace(/（.*）$/, '');
-  const send = () => { if (!text.trim()) return; commentTodo(todo.id, text.trim()); setText(''); };
   return (
     <div className="p9-todo-detail">
       <div className="p9-crumb"><button type="button" className="p9-link" onClick={onBack}><ArrowLeft size={11} />待办与澄清</button><span>/</span><b>{short}</b></div>
@@ -130,12 +150,9 @@ function TodoDetail({ todo, onBack }: { todo: D.Todo; onBack: () => void }) {
       )}
       <section className="p9-card is-fill">
         <header className="p9-card-head"><div className="p9-card-head-left"><MessageSquare size={13} className="ic-blue" /><h3>评论与动态 · {todo.comments.length}</h3></div><span className="p9-card-hint">最新在前</span></header>
-        <CommentList comments={todo.comments} />
+        <CommentList comments={todo.comments} onDelete={i => deleteComment(todo.id, i)} />
         <span className="p9-grow" />
-        <div className="p9-comment-input">
-          <label><input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') send(); }} placeholder="写评论，@ 可提醒同事…" /><Mic size={12} /></label>
-          <button type="button" className="p9-send is-lg" onClick={send} aria-label="发送"><ArrowUp size={14} /></button>
-        </div>
+        <CommentInput onSend={t => commentTodo(todo.id, t)} />
       </section>
     </div>
   );
@@ -177,7 +194,7 @@ export function CompleteModal({ todoId }: { todoId: string }) {
 
 /** P9.7.4 评论弹层。 */
 export function CommentModal({ todoId }: { todoId: string }) {
-  const { todos, setModal, commentTodo, setTodoId } = useP9();
+  const { todos, setModal, commentTodo, deleteComment, setTodoId } = useP9();
   const t = todos.find(x => x.id === todoId);
   const [text, setText] = useState('');
   if (!t) return null;
@@ -189,10 +206,83 @@ export function CommentModal({ todoId }: { todoId: string }) {
       <Btn kind="primary" size="lg" icon={ArrowUp} onClick={send}>发送</Btn>
     </>}>
       <div className="p9-cm-todo"><b>{t.full || t.title}</b><small>负责人 {t.owner} · 截止 {t.due} · 来源 {t.src}</small></div>
-      <div className="p9-cm-list"><CommentList comments={t.comments.filter(c => !c.system)} /></div>
+      <div className="p9-cm-list"><CommentList comments={t.comments} hideSystem onDelete={i => deleteComment(t.id, i)} /></div>
       <div className="p9-cm-input">
         <textarea value={text} onChange={e => setText(e.target.value)} placeholder="追加评论，@ 可提醒同事…" onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }} />
-        <div className="p9-cm-tools"><AtSign size={11} /><Paperclip size={11} /><Smile size={11} /><Mic size={11} /><span className="p9-grow" /><small>⌘ + Enter 发送</small></div>
+        <div className="p9-cm-tools"><AtSign size={11} /><Paperclip size={11} /><Smile size={11} /><Mic size={11} /><span className="p9-grow" /><small>Ctrl + Enter 发送</small></div>
+      </div>
+    </Modal>
+  );
+}
+
+/** 澄清详情（Tab 内二级页）：问题 + 基本信息 + 答复 + 评论与动态。 */
+function ClarDetail({ clar, onBack }: { clar: D.Clar; onBack: () => void }) {
+  const { clarComments, commentClar, deleteClarComment, answerClar, notify } = useP9();
+  const [draft, setDraft] = useState(clar.answer || '');
+  const [inBid, setInBid] = useState(clar.status === '已答复');
+  const answered = clar.status === '已答复';
+  const comments = clarComments[clar.id] || [];
+  return (
+    <div className="p9-todo-detail">
+      <div className="p9-crumb"><button type="button" className="p9-link" onClick={onBack}><ArrowLeft size={11} />待办与澄清</button><span>/</span><b>澄清条目</b></div>
+      <section className="p9-card">
+        <div className="p9-td-head">
+          <div className="p9-grow">
+            <h2>{clar.q}</h2>
+            <div className="p9-td-tags">
+              <Pill tone={answered ? 'green' : 'orange'}>{clar.status}</Pill>
+              <Pill tone={clar.type === '技术' ? 'blue' : clar.type === '商务' ? 'purple' : 'green'}>{clar.type}</Pill>
+              <RoundTag round={clar.round} label={clar.round === 'R1' ? '首轮' : '次轮'} />
+              <Pill tone="gray">{clar.dir}</Pill>
+            </div>
+          </div>
+          {answered && <Btn kind="ghost" icon={RotateCcw} onClick={() => answerClar(clar.id, null)}>重新打开</Btn>}
+          <Btn kind="soft" size="sm" icon={BellRing} onClick={() => notify(`已催办 ${clar.owner}：截止 ${clar.due}`)}>催办</Btn>
+        </div>
+        <div className="p9-td-info">
+          {[['责任方', `${clar.owner}（${D.ROLE_OF[clar.owner] || '—'}）`], ['答复截止', clar.due], ['方向', clar.dir === 'pre-bid' ? 'pre-bid · 交标前答疑' : 'post-bid · 评标期澄清'], ['来源', clar.dir === 'pre-bid' ? '招标文件答疑会' : '客户澄清会（第一轮）'], ['关联条款', clar.type === '技术' ? '第四章 技术要求' : '第五章 商务条款'], ['标书影响', inBid ? '已写入标书' : '待评估']].map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}
+        </div>
+      </section>
+      <section className="p9-card">
+        <header className="p9-card-head"><div className="p9-card-head-left"><PenLine size={13} className="ic-blue" /><h3>我方答复</h3><span className="p9-card-hint">{answered ? '已提交 · 可重新打开修改' : '提交后同步到澄清台账，并可写入标书'}</span></div>
+          <label className="p9-inbid"><Checkbox checked={inBid} onChange={() => setInBid(!inBid)} label="答复写入标书" />答复写入标书（编制影响项）</label>
+        </header>
+        <div className="p9-card-body">
+          {answered ? <p className="p9-result-note is-plain">{clar.answer || "答复内容未录入，可「重新打开」后补录。"}</p> : (
+            <span className="p9-textarea is-tall"><textarea value={draft} maxLength={500} onChange={e => setDraft(e.target.value)} placeholder="写下对客户的书面答复…" /><span className="p9-ta-foot"><Mic size={11} /><span className="p9-grow" />{draft.length} / 500</span></span>
+          )}
+          {!answered && <div className="p9-btn-row"><Btn kind="primary" size="sm" icon={Check} disabled={!draft.trim()} onClick={() => answerClar(clar.id, draft.trim())}>提交答复</Btn></div>}
+        </div>
+      </section>
+      <section className="p9-card is-fill">
+        <header className="p9-card-head"><div className="p9-card-head-left"><MessageSquare size={13} className="ic-blue" /><h3>评论与动态 · {comments.length}</h3></div><span className="p9-card-hint">最新在前</span></header>
+        <CommentList comments={comments} onDelete={i => deleteClarComment(clar.id, i)} />
+        <span className="p9-grow" />
+        <CommentInput onSend={t => commentClar(clar.id, t)} />
+      </section>
+    </div>
+  );
+}
+
+/** 澄清条目评论弹层（与待办评论同一套样式）。 */
+export function ClarCommentModal({ clarId }: { clarId: string }) {
+  const { clars, clarComments, commentClar, deleteClarComment, setModal, setClarId } = useP9();
+  const c = clars.find(x => x.id === clarId);
+  const [text, setText] = useState('');
+  if (!c) return null;
+  const list = clarComments[c.id] || [];
+  const send = () => { if (!text.trim()) return; commentClar(c.id, text.trim()); setText(''); };
+  return (
+    <Modal icon={MessageSquare} title={`评论 · ${list.filter(x => !x.system).length} 条`} width={480} onClose={() => setModal(null)} className="is-comment" footer={<>
+      <span className="p9-modal-foot-note">评论会同步给责任方与提出人</span><span className="p9-grow" />
+      <button type="button" className="p9-link" onClick={() => { setModal(null); setClarId(c.id); }}>查看完整详情 ›</button>
+      <Btn kind="primary" size="lg" icon={ArrowUp} disabled={!text.trim()} onClick={send}>发送</Btn>
+    </>}>
+      <div className="p9-cm-todo"><b>{c.q}</b><small>{c.type} · {c.dir} · 责任方 {c.owner} · 截止 {c.due} · {c.status}</small></div>
+      <div className="p9-cm-list"><CommentList comments={list} hideSystem onDelete={i => deleteClarComment(c.id, i)} /></div>
+      <div className="p9-cm-input">
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="追加评论，@ 可提醒同事…" onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }} />
+        <div className="p9-cm-tools"><AtSign size={11} /><Paperclip size={11} /><Smile size={11} /><Mic size={11} /><span className="p9-grow" /><small>Ctrl + Enter 发送</small></div>
       </div>
     </Modal>
   );

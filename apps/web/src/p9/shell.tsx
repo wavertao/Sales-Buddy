@@ -1,7 +1,7 @@
 // P9 布局外壳：左侧栏（对话记录 + 功能板块）、详情页顶栏 / 节点条 / Tab 行、右侧常驻投标助理。
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, ArrowUp, AtSign, Bot, CalendarDays, Check, ChevronRight, ChevronUp, ChevronsRight, Clock3, Compass, FileText, Gavel,
+  ArrowLeft, ArrowUp, AtSign, Bot, CalendarDays, Check, ChevronRight, ChevronUp, ChevronsLeft, ChevronsRight, Clock3, Compass, FileText, Gavel,
   LayoutGrid, Lightbulb, MessageSquare, Mic, PanelLeft, Plus, Radar, Settings, Sparkles, SquarePen, BriefcaseBusiness, TrendingUp, Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -56,7 +56,7 @@ export function Sidebar() {
 
 /** 详情页顶栏 + 节点条 + 11 个 Tab。 */
 export function DetailHeader({ right }: { right?: React.ReactNode }) {
-  const { bid, node, setView, tab, setTab, setModal, notify, live, call } = useP9();
+  const { bid, node, setView, tab, setTab, setModal, notify, live, call, dockOpen, setDockOpen } = useP9();
   const daysLeft = live?.daysLeft ?? 12;
   const curRound = 'R2';
   return (
@@ -72,7 +72,7 @@ export function DetailHeader({ right }: { right?: React.ReactNode }) {
         <div className="p9-topbar-right">
           {right ?? <>
             <span className="p9-time-pill"><Clock3 size={11} />距开标 {daysLeft} 天</span>
-            <button type="button" className="p9-ai-btn" onClick={() => document.querySelector<HTMLTextAreaElement>('.p9-dock textarea')?.focus()}><Sparkles size={13} />和纵横对话</button>
+            <button type="button" className={cx('p9-ai-btn', dockOpen && 'is-on')} onClick={() => setDockOpen(!dockOpen)} aria-pressed={dockOpen}><Sparkles size={13} />和纵横对话</button>
             <button type="button" className="p9-group-btn" onClick={async () => { const r = await call(`/bids/${encodeURIComponent(bid.id)}/group`, 'POST', {}); notify(r?.url ? '已建群：' + r.url : '已发起建群：SPP 团队 6 人已拉入钉钉群'); }}><Users size={13} />一键建群</button>
           </>}
         </div>
@@ -82,7 +82,9 @@ export function DetailHeader({ right }: { right?: React.ReactNode }) {
           const state = i < node ? 'done' : i === node ? 'now' : 'todo';
           const date = i === node ? `剩 ${daysLeft} 天` : D.NODE_DATES[i] === '剩 12 天' ? '10-14' : D.NODE_DATES[i];
           return (
-            <button type="button" key={n} className={cx('p9-node', 'is-' + state)} onClick={() => i === node ? setModal({ kind: 'advance' }) : setTab(i <= 1 ? (i === 0 ? 'basic' : 'strategy') : i === 2 ? 'docs' : i === 3 || i === 4 ? 'meetings' : i === 5 ? 'files' : i === 6 ? 'submit' : i === 8 ? 'bafo' : i === 9 ? 'review' : 'todos')} title={i === node ? '点击推进到下一节点' : n}>
+            <button type="button" key={n} className={cx('p9-node', 'is-' + state)} disabled={state === 'todo'}
+              onClick={() => setModal(i === node ? { kind: 'advance' } : { kind: 'rollback', to: i })}
+              title={i === node ? '点击推进到下一节点' : state === 'done' ? `回退到「${n}」` : n}>
               <span className="p9-node-top"><span className="p9-node-dot">{state === 'done' ? <Check size={9} strokeWidth={3} /> : state === 'now' ? <i /> : null}</span>{i < 9 && <span className="p9-node-line" />}</span>
               <span className="p9-node-name">{n}</span>
               <span className="p9-node-date">{date}</span>
@@ -112,7 +114,7 @@ const REPLIES: [RegExp, string][] = [
 
 /** 右侧常驻投标助理。variant="cockpit" 为驾驶舱的渐变头像 + 会话版；其余屏为上下文条 + 快捷问。 */
 export function Dock({ variant = 'default', context, initial }: { variant?: 'default' | 'cockpit'; context?: { badges: string[]; note: string }; initial?: D.ChatMsg[] }) {
-  const { bid, call, live } = useP9();
+  const { bid, call, live, dockOpen, setDockOpen, todos } = useP9();
   const [msgs, setMsgs] = useState<D.ChatMsg[]>(initial ?? [D.DOCK_WELCOME]);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
@@ -129,6 +131,18 @@ export function Dock({ variant = 'default', context, initial }: { variant?: 'def
     setMsgs(m => [...m, { who: 'ai', text: r?.reply || r?.answer || canned, meta: now + ' · 已引用本标数据' }]);
     setBusy(false);
   };
+  if (!dockOpen) {
+    // 收起态：44px 竖条（设计稿组件「投标助理 Dock · 收起」），不展示对话内容
+    const open = todos.filter(t => t.overdue && t.status !== '已完成').length;
+    return (
+      <aside className="p9-dock-rail" aria-label="投标助理（已收起）">
+        <button type="button" className="p9-dock-av" onClick={() => setDockOpen(true)} title="展开投标助理"><Bot size={15} /></button>
+        <button type="button" className="p9-dock-btn" onClick={() => setDockOpen(true)} aria-label="展开投标助理"><ChevronsLeft size={13} /></button>
+        <span className="p9-grow" />
+        {open > 0 && <span className="p9-rail-badge" title={open + ' 条逾期待办'}>{open}</span>}
+      </aside>
+    );
+  }
   const ctx = context ?? { badges: [`${bid.number} · R2`, '节点 ③ 标书分解', `健康度 ${live?.health?.score ?? 68}`], note: '已接入：健康度 / 卡点 / 逾期任务 / 澄清 · 实时' };
   return (
     <aside className={cx('p9-dock', 'is-' + variant)}>
@@ -136,7 +150,7 @@ export function Dock({ variant = 'default', context, initial }: { variant?: 'def
         <span className={cx('p9-dock-av', variant === 'cockpit' && 'is-grad')}>{variant === 'cockpit' ? <Sparkles size={14} /> : <Bot size={14} />}</span>
         <div className="p9-grow"><b>投标助理</b><small>AI · 已接入本标 21 项数据</small></div>
         <button type="button" className={cx('p9-dock-btn', variant === 'cockpit' && 'tone-blue')} title="新对话" onClick={() => setMsgs([D.DOCK_WELCOME])}><SquarePen size={13} /></button>
-        <button type="button" className="p9-dock-btn" title="收起"><ChevronsRight size={13} /></button>
+        <button type="button" className="p9-dock-btn" title="收起" aria-label="收起投标助理" onClick={() => setDockOpen(false)}><ChevronsRight size={13} /></button>
       </header>
       {variant === 'default' && <>
         <div className="p9-dock-ctx">

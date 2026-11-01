@@ -256,14 +256,18 @@ export const TODOS: Todo[] = [
   { id: 't4', title: '质保 5 年 / 10 年两版重新报价', round: 'R2', src: '会议 · 澄清会', owner: '王芳', due: '10-28', pri: 'P1', status: '已完成', mine: true,
     comments: [{ who: '王芳', time: '10-26 17:02', text: '两版报价已上传到报价文件夹。' }, { who: '系统', time: '10-25 11:20', text: '由会议「客户澄清会（第一轮）」生成', system: true }],
     result: { outcome: '已完成', who: '王芳', time: '10-26 17:00', note: '质保 5 年 / 10 年两版报价已出，10 年版作为可选项单独报价。' } },
+  { id: 't5', title: '技术标 12 项强制响应未提交', round: 'R2', src: '③ 标书分解', owner: '陈磊', due: '10-21', pri: 'P0', status: '进行中', mine: false, overdue: true,
+    comments: [{ who: '王强', time: '10-24 09:00', text: '已升级 L2，今天 18:00 前回填剩余 4 项参数。' }, { who: '系统', time: '10-22 09:00', text: '逾期 1 天，自动催办陈磊', system: true }] },
+  { id: 't6', title: '报价版本未过 BSD 评审', round: 'R2', src: '⑥ 投标文件制作', owner: '李明', due: '10-23', pri: 'P0', status: '进行中', mine: false, overdue: true,
+    comments: [{ who: '李明', time: '10-24 10:20', text: 'BSD 要求补成本拆分表，今晚提交。' }] },
 ];
-export interface Clar { id: string; type: '技术' | '商务' | '偏差'; round: string; dir: 'pre-bid' | 'post-bid'; q: string; owner: string; due: string; status: '待答复' | '已答复'; comments: number }
+export interface Clar { id: string; type: '技术' | '商务' | '偏差'; round: string; dir: 'pre-bid' | 'post-bid'; q: string; owner: string; due: string; status: '待答复' | '已答复'; comments: number; answer?: string }
 export const CLARS: Clar[] = [
   { id: 'c1', type: '技术', round: 'R2', dir: 'pre-bid', q: '澄清 4.2 节：是否接受远程调试？', owner: '陈磊', due: '10-25', status: '待答复', comments: 3 },
   { id: 'c2', type: '商务', round: 'R2', dir: 'post-bid', q: '质保年限可否延长至 10 年？', owner: '王芳', due: '10-26', status: '待答复', comments: 3 },
-  { id: 'c3', type: '偏差', round: 'R2', dir: 'pre-bid', q: '付款节点能否接受 3-4-3？', owner: '王芳', due: '10-25', status: '已答复', comments: 3 },
+  { id: 'c3', type: '偏差', round: 'R2', dir: 'pre-bid', q: '付款节点能否接受 3-4-3？', owner: '王芳', due: '10-25', status: '已答复', comments: 3, answer: '接受 3-4-3 付款节点，商务偏差表同步更新，偏差项撤销。' },
   { id: 'c4', type: '技术', round: 'R1', dir: 'post-bid', q: 'BESS 台数由 20 台优化为 18 台是否可行？', owner: '陈磊', due: '10-28', status: '待答复', comments: 3 },
-  { id: 'c5', type: '商务', round: 'R1', dir: 'pre-bid', q: '投标保证金能否用保函替代？', owner: '李明', due: '10-24', status: '已答复', comments: 1 },
+  { id: 'c5', type: '商务', round: 'R1', dir: 'pre-bid', q: '投标保证金能否用保函替代？', owner: '李明', due: '10-24', status: '已答复', comments: 1, answer: '可以用银行保函替代，格式按招标文件附件 7，有效期覆盖投标有效期 + 30 天。' },
 ];
 export const TODO_DETAIL_EXTRA = {
   creator: '王强 · 10-20 14:20', deadline: '2026-10-25（今天）', customer: '宁德时代', opp: '储能项目 200MW/400MWh', lead: '—',
@@ -274,16 +278,16 @@ export const COMPLETE_OUTCOMES: [string, string][] = [['已完成', 'green'], ['
 
 // ---------------- P9.8 交标与结果 ----------------
 export const CHECK_SUMMARY = '齐备性 5 项缺 1（报价表待上传）；四源核查发现 3 项偏差未闭环 —— 建议补齐后再发起签章流程。';
-export interface CheckSection { key: string; name: string; summary: string; state: '偏差未闭环' | '待检查' | '未复查' | '已通过'; bar: 'red' | 'orange' | 'gray' | 'green'; items?: { title: string; meta: string }[]; note?: string; action?: string }
+export interface CheckSection { key: string; name: string; summary: string; state: '偏差未闭环' | '待检查' | '未复查' | '已通过'; bar: 'red' | 'orange' | 'gray' | 'green'; items?: { title: string; meta: string; todo?: string; clar?: string }[]; note?: string; action?: string }
 export const CHECK_SECTIONS: CheckSection[] = [
   { key: 'todo', name: '待办闭环', summary: '12 项待办 · 2 条未闭环', state: '偏差未闭环', bar: 'red', items: [
-    { title: '技术标 12 项强制响应未提交', meta: '陈磊 SC · 逾期 3 天 · P0' },
-    { title: '报价版本未过 BSD 评审', meta: '李明 SLS · 超时 26h · P0' },
+    { title: '技术标 12 项强制响应未提交', meta: '陈磊 SC · 逾期 3 天 · P0', todo: 't5' },
+    { title: '报价版本未过 BSD 评审', meta: '李明 SLS · 超时 26h · P0', todo: 't6' },
   ], note: '来自待办与澄清 · 处理完点「开始检查」重跑' },
   { key: 'clar', name: '澄清答复', summary: '8 条澄清 · 3 条超 48h 未回', state: '偏差未闭环', bar: 'red', items: [
-    { title: '澄清 4.2 节：是否接受远程调试？', meta: '陈磊 SC · 截止 10-25 · 待答复' },
-    { title: '质保年限可否延长至 10 年？', meta: '王芳 AMD · 截止 10-26 · 待答复' },
-    { title: 'BESS 台数由 20 台优化为 18 台是否可行？', meta: '陈磊 SC · 截止 10-28 · 待答复' },
+    { title: '澄清 4.2 节：是否接受远程调试？', meta: '陈磊 SC · 截止 10-25 · 待答复', clar: 'c1' },
+    { title: '质保年限可否延长至 10 年？', meta: '王芳 AMD · 截止 10-26 · 待答复', clar: 'c2' },
+    { title: 'BESS 台数由 20 台优化为 18 台是否可行？', meta: '陈磊 SC · 截止 10-28 · 待答复', clar: 'c4' },
   ], note: '来自待办与澄清 · 答复后点「开始检查」重跑' },
   { key: 'checklist', name: 'checklist', summary: '14 项 · 缺 1 项 UL9540A 报告', state: '偏差未闭环', bar: 'red', items: [
     { title: 'UL9540A 热失控测试报告', meta: '张伟 QA · 资质类 · 必选' },
@@ -352,3 +356,28 @@ export const M_STRATEGY: [string, string, string][] = [
   ['对客策略', '来自策略会', '决策链：技术中心 → 采购 → 集团投决；价值主线：全生命周期 IRR / LTSA'],
   ['竞争策略', '来自竞对分析', '对手：阳光电源 / 比亚迪；差异化：10 年质保 + 备件 2 年，不打纯价格战'],
 ];
+
+/** 澄清条目的评论（P9.7 澄清行的评论弹层 / 澄清详情）。 */
+export const CLAR_COMMENTS: Record<string, Comment[]> = {
+  c1: [
+    { who: '陈磊', time: '10-24 17:20', text: '远程调试可以支持，边界写「不含现场网络改造」，答复稿今晚给。' },
+    { who: '李明', time: '10-24 15:02', text: '客户要求 10-25 18:00 前书面答复，逾期视为放弃。' },
+    { who: '系统', time: '10-23 10:00', text: '由会议「招标文件答疑会」生成', system: true },
+  ],
+  c2: [
+    { who: '王芳', time: '10-25 11:40', text: '10 年质保做成可选项单独报价，基础版本仍是 5 年。' },
+    { who: '王强', time: '10-25 11:10', text: '和技术标口径保持一致，别出现两套年限。' },
+    { who: '系统', time: '10-25 11:00', text: '由会议「客户澄清会（第一轮）」生成', system: true },
+  ],
+  c3: [
+    { who: '王芳', time: '10-24 16:00', text: '已答复：接受 3-4-3，偏差表同步更新。' },
+    { who: '李明', time: '10-24 10:30', text: '我方原报 3-3-4，需商务确认能否让步。' },
+    { who: '系统', time: '10-23 10:00', text: '由招标文件第五章商务条款识别', system: true },
+  ],
+  c4: [
+    { who: '陈磊', time: '10-26 09:30', text: '18 台会拉低可用率承诺，建议坚持 20 台。' },
+    { who: '王强', time: '10-25 18:20', text: '先测算两种方案的可用率再答复。' },
+    { who: '系统', time: '10-25 11:00', text: '由会议「客户澄清会（第一轮）」生成', system: true },
+  ],
+  c5: [{ who: '李明', time: '10-24 09:00', text: '已答复：可用银行保函替代，格式按招标文件附件 7。' }],
+};

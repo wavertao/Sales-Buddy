@@ -39,16 +39,38 @@ function SearchPanel({ onClose, onSearch }: { onClose: () => void; onSearch: (q:
   );
 }
 
+const SORTS: [string, (a: D.BidRow, b: D.BidRow) => number][] = [
+  ['按交标日升序', (a, b) => a.due.localeCompare(b.due)],
+  ['按交标日降序', (a, b) => b.due.localeCompare(a.due)],
+  ['按发起时间（新→旧）', (a, b) => b.fromDate.localeCompare(a.fromDate)],
+  ['按当前节点（靠前优先）', (a, b) => a.node - b.node],
+  ['按状态（风险优先）', (a, b) => ['已逾期', '风险', '进行中', '已交标', '已定标', '已流标'].indexOf(a.status) - ['已逾期', '风险', '进行中', '已交标', '已定标', '已流标'].indexOf(b.status)],
+];
+
+/** 排序下拉（P9.0.1 筛选条右侧）。 */
+function SortMenu({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="p9-sort-wrap" onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false); }}>
+      <button type="button" className={cx('p9-sort', open && 'is-open')} onClick={e => { e.stopPropagation(); setOpen(!open); }} aria-haspopup="listbox" aria-expanded={open}>{value}<ArrowDownWideNarrow size={12} /></button>
+      {open && <span className="p9-sort-menu" role="listbox">{SORTS.map(([k]) => (
+        <button type="button" role="option" aria-selected={k === value} key={k} className={cx(k === value && 'is-on')} onClick={e => { e.stopPropagation(); onChange(k); setOpen(false); }}>{k}{k === value && <Check size={11} />}</button>
+      ))}</span>}
+    </span>
+  );
+}
+
 export function BidList() {
   const { bids, openBid, setModal, setView } = useP9();
   const [filter, setFilter] = useState('全部');
   const [q, setQ] = useState('');
   const [searching, setSearching] = useState(false);
   const [archived, setArchived] = useState(false);
+  const [sort, setSort] = useState(SORTS[0][0]);
   const rows = useMemo(() => bids.filter(b =>
     (filter === '全部' || (filter === '待我处理' ? b.mine : b.status === filter)) &&
     (!q || q.split(/\s+/).every(k => (b.number + b.customer + b.project + b.owner + b.team + D.NODES[b.node]).includes(k)))
-  ).sort((a, b) => a.due.localeCompare(b.due)), [bids, filter, q]);
+  ).sort(SORTS.find(s => s[0] === sort)![1]), [bids, filter, q, sort]);
   const count = (f: string) => f === '全部' ? bids.length + 2 : f === '待我处理' ? bids.filter(b => b.mine).length : bids.filter(b => b.status === f).length + (f === '已交标' ? 2 : f === '已定标' ? 2 : f === '已流标' ? 1 : 0);
   return (
     <div className="p9-page" onClick={() => setSearching(false)}>
@@ -70,8 +92,7 @@ export function BidList() {
             <div className="p9-filter-row">
               {D.LIST_FILTERS.map(([f]) => <button type="button" key={f} className={cx('p9-chip', filter === f && 'is-on')} onClick={() => setFilter(f)}>{f} {count(f)}</button>)}
               <span className="p9-grow" />
-              <button type="button" className="p9-sort" onClick={() => setView('opp')} title="P9.0.2 商机详情 · 投标 Tab">按商机查看 · 宁德时代</button>
-              <button type="button" className="p9-sort">按交标日升序<ArrowDownWideNarrow size={12} /></button>
+              <SortMenu value={sort} onChange={setSort} />
             </div>
             <div className="p9-stat-row">
               {D.LIST_STATS.map(s => <div key={s.label} className="p9-stat"><span>{s.label}</span><b className={'tone-' + s.tone}>{s.label === '进行中' ? bids.filter(b => b.status === '进行中').length : s.value}</b><small>{s.note}</small></div>)}

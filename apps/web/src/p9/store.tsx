@@ -11,7 +11,7 @@ export const TABS: [Tab, string, boolean?][] = [
   ['cockpit', '驾驶舱'], ['basic', '基本信息'], ['strategy', '投标策略'], ['plan', '计划', true], ['docs', '招标文件'],
   ['meetings', '会议', true], ['files', '文件'], ['todos', '待办与澄清'], ['submit', '交标与结果'], ['bafo', 'BAFO 对比'], ['review', '定标复盘'],
 ];
-export type Modal = null | { kind: 'create' } | { kind: 'created'; number: string } | { kind: 'complete'; todoId: string } | { kind: 'comment'; todoId: string } | { kind: 'advance' };
+export type Modal = null | { kind: 'create' } | { kind: 'created'; number: string } | { kind: 'complete'; todoId: string } | { kind: 'comment'; todoId: string } | { kind: 'advance' } | { kind: 'rollback'; to: number } | { kind: 'round'; dir: 'next' | 'back' } | { kind: 'clarComment'; clarId: string };
 
 export interface P9State {
   api: Api; user: any; online: boolean; today: string | null;
@@ -19,8 +19,12 @@ export interface P9State {
   tab: Tab; setTab: (t: Tab) => void;
   bids: D.BidRow[]; bid: D.BidRow; openBid: (id: string, tab?: Tab) => void;
   live: LiveBundle | null;
-  node: number; advanceNode: (note: string) => void;
-  rounds: D.Round[]; advanceRound: () => void;
+  node: number; advanceNode: (note: string) => void; rollbackNode: (to: number, reason: string) => void;
+  rounds: D.Round[]; advanceRound: () => void; rollbackRound: (reason: string) => void;
+  deleteComment: (todoId: string, index: number) => void;
+  clarComments: Record<string, D.Comment[]>; commentClar: (id: string, text: string) => void; deleteClarComment: (id: string, index: number) => void;
+  clarId: string | null; setClarId: (id: string | null) => void;
+  answerClar: (id: string, answer: string | null) => void;
   atb: D.AtbGroup[]; setAtbField: (group: string, field: string, value: string) => void;
   todos: D.Todo[]; completeTodo: (id: string, outcome: string, note: string, file?: string) => void; commentTodo: (id: string, text: string) => void; reopenTodo: (id: string) => void;
   clars: D.Clar[];
@@ -31,6 +35,7 @@ export interface P9State {
   modal: Modal; setModal: (m: Modal) => void;
   createBid: (form: { country: string; form: string; target: string }) => void;
   toast: string; notify: (text: string) => void;
+  dockOpen: boolean; setDockOpen: (v: boolean) => void;
   call: (path: string, method?: string, body?: unknown) => Promise<any>;
   exit: (page: string) => void;
 }
@@ -61,6 +66,7 @@ export function P9Provider({ api, user, onExit, children }: { api: Api; user: an
   const [todoId, setTodoId] = useState<string | null>(null);
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState('');
+  const [dockOpen, setDockOpen] = useState(false); // 投标助理默认收起，点「和纵横对话」展开
   const timer = useRef<number | undefined>(undefined);
 
   const notify = useCallback((text: string) => {
@@ -101,7 +107,7 @@ export function P9Provider({ api, user, onExit, children }: { api: Api; user: an
   }, [api, bidId, online, user?.id]);
 
   const bid = bids.find(b => b.id === bidId) || bids[0];
-  const setTab = useCallback((t: Tab) => { setTabRaw(t); setMeetingId(null); setTodoId(null); }, []);
+  const setTab = useCallback((t: Tab) => { setTabRaw(t); setMeetingId(null); setTodoId(null); setClarIdRaw(null); }, []);
   const openBid = useCallback((id: string, t: Tab = 'cockpit') => {
     setBidId(id); setView('detail'); setTabRaw(t); setMeetingId(null); setTodoId(null);
     // 新发起（节点 ①②）的投标还没有招标文件：招标文件 Tab 显示空态，计划 Tab 显示阶段级初版
@@ -136,6 +142,36 @@ export function P9Provider({ api, user, onExit, children }: { api: Api; user: an
     setNode(n => Math.min(9, n + 1));
     notify(`已推进到「${D.NODES[Math.min(9, node + 1)]}」${note ? '，推进说明已写入节点日志' : ''}`);
   }, [node, notify]);
+  const rollbackNode = useCallback((to: number, reason: string) => {
+    setNode(to);
+    notify(`已回退到「${D.NODES[to]}」${reason ? '，回退原因已写入节点日志' : ''}；之后节点转为待开始`);
+  }, [notify]);
+  const rollbackRound = useCallback((reason: string) => {
+    setRounds(rs => {
+      const i = rs.findIndex(r => r.state === 'now');
+      if (i <= 0) { notify('已是首轮，无法回退'); return rs; }
+      notify(`已回退到 ${rs[i - 1].no} · ${rs[i - 1].label}${reason ? '，回退原因已写入操作日志' : ''}`);
+      return rs.map((r, k) => k === i - 1 ? { ...r, state: 'now', note: '进行中 · 可继续补字段' } : k === i ? { ...r, state: 'todo', date: D.ROUNDS[k].state === 'todo' ? D.ROUNDS[k].date : '预计 ' + r.date.slice(0, 5), note: '点击推进到此轮 →' } : r);
+    });
+  }, [notify]);
+  const deleteComment = useCallback((todoId: string, index: number) => {
+    setTodos(ts => ts.map(t => t.id === todoId ? { ...t, comments: t.comments.filter((_, i) => i !== index) } : t));
+    notify('评论已删除');
+  }, [notify]);
+  const [clarComments, setClarComments] = useState<Record<string, D.Comment[]>>(D.CLAR_COMMENTS);
+  const [clarId, setClarIdRaw] = useState<string | null>(null);
+  const commentClar = useCallback((id: string, text: string) => {
+    setClarComments(m => ({ ...m, [id]: [{ who: user?.name || '我', time: '刚刚', text }, ...(m[id] || [])] }));
+  }, [user?.name]);
+  const answerClar = useCallback((id: string, answer: string | null) => {
+    setClars(cs => cs.map(c => c.id === id ? { ...c, status: answer === null ? '待答复' : '已答复', answer: answer ?? undefined } : c));
+    void call(`${base}/clarifications/${encodeURIComponent(id)}/status`, 'POST', answer === null ? { status: 'open' } : { status: 'answered', answer });
+    notify(answer === null ? '澄清已重新打开' : '答复已提交，已同步到澄清条目');
+  }, [base, call, notify]);
+  const deleteClarComment = useCallback((id: string, index: number) => {
+    setClarComments(m => ({ ...m, [id]: (m[id] || []).filter((_, i) => i !== index) }));
+    notify('评论已删除');
+  }, [notify]);
   const advanceRound = useCallback(() => {
     setRounds(rs => {
       const i = rs.findIndex(r => r.state === 'now');
@@ -158,9 +194,9 @@ export function P9Provider({ api, user, onExit, children }: { api: Api; user: an
   }, [call, today, user?.name]);
 
   const value = useMemo<P9State>(() => ({
-    api, user, online, today, view, setView, tab, setTab, bids, bid, openBid, live, node, advanceNode, rounds, advanceRound,
+    api, user, online, today, view, setView, tab, setTab, bids, bid, openBid, live, node, advanceNode, rollbackNode, rounds, advanceRound, rollbackRound, deleteComment, clarComments, commentClar, deleteClarComment, clarId, setClarId: setClarIdRaw, answerClar,
     atb, setAtbField, todos, completeTodo, commentTodo, reopenTodo, clars, plan, setPlan, docsState, setDocsState,
-    meetingId, setMeetingId, todoId, setTodoId, modal, setModal, createBid, toast, notify, call, exit: onExit,
-  }), [api, user, online, today, view, tab, setTab, bids, bid, openBid, live, node, advanceNode, rounds, advanceRound, atb, setAtbField, todos, completeTodo, commentTodo, reopenTodo, clars, plan, docsState, meetingId, todoId, modal, createBid, toast, notify, call, onExit]);
+    meetingId, setMeetingId, todoId, setTodoId, modal, setModal, createBid, toast, notify, call, exit: onExit, dockOpen, setDockOpen,
+  }), [api, user, online, today, view, tab, setTab, bids, bid, openBid, live, node, advanceNode, rollbackNode, rounds, advanceRound, rollbackRound, deleteComment, clarComments, commentClar, deleteClarComment, clarId, answerClar, atb, setAtbField, todos, completeTodo, commentTodo, reopenTodo, clars, plan, docsState, meetingId, todoId, modal, createBid, toast, notify, call, onExit, dockOpen]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

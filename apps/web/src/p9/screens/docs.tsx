@@ -60,6 +60,16 @@ function Parsing({ name, onDone }: { name: string; onDone: () => void }) {
   );
 }
 
+/** 导出拆标分解表为 CSV（带 BOM，Excel 直接打开不乱码）。 */
+function exportRows(bidNo: string) {
+  const esc = (v: string) => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  const lines = [['类别', '条目 / 来源条款', '责任人', '开始', '截止', '状态'].join(',')];
+  for (const g of D.DOC_GROUPS) for (const r of g.rows) { const [a, b] = r.date.split(' → '); lines.push([g.cat, r.title, r.owner || '未派', a, b, r.status].map(esc).join(',')); }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = bidNo + '-拆标分解表.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+
 export function Docs() {
   const { docsState, setDocsState, notify, call, bid, setTab } = useP9();
   const [fileName, setFileName] = useState('XX储能项目招标文件_终版.pdf');
@@ -95,7 +105,7 @@ export function Docs() {
           <div className="p9-card-head-right">
             <Btn kind="ai" size="sm" icon={Sparkles} onClick={async () => { await call(`/bids/${encodeURIComponent(bid.id)}/ai/decompose`, 'POST', {}); notify('AI 已重新解析：人工改过的条目不覆盖，新增 0 条'); }}>AI 解析</Btn>
             <button type="button" className="p9-sq-btn is-sm" aria-label="导入" onClick={() => reupload.current?.click()}><Upload size={12} /></button>
-            <button type="button" className="p9-sq-btn is-sm" aria-label="导出" onClick={() => notify('已导出拆标分解表（Excel）')}><Download size={12} /></button>
+            <button type="button" className="p9-sq-btn is-sm" aria-label="导出" onClick={() => { exportRows(bid.number); notify('已导出拆标分解表（CSV，可用 Excel 打开）'); }}><Download size={12} /></button>
             <Btn kind="primary" size="sm" icon={Send} disabled={submitted} onClick={() => { setSubmitted(true); notify('已提交 BSD 审核：拆解表版本已锁定，BSD 收到待办'); window.setTimeout(() => setTab('plan'), 900); }}>{submitted ? '已提交 BSD' : '提交 BSD 审核'}</Btn>
           </div>
         </header>

@@ -118,6 +118,15 @@ function MeetingDetail({ meeting, onBack }: { meeting: D.Meeting; onBack: () => 
   );
 }
 
+function NameInput({ value, icon, onDone }: { value: string; icon?: boolean; onDone: (v: string) => void }) {
+  return (
+    <div className={cx(icon ? 'p9-tree-row' : 'p9-tree-sub', 'is-on is-edit')}>
+      {icon ? <FolderOpen size={12} /> : <i />}
+      <input autoFocus defaultValue={value} aria-label="文件夹名称" onFocus={e => e.target.select()} onBlur={e => onDone(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') onDone(value); }} />
+    </div>
+  );
+}
+
 export function Files() {
   const { live, notify } = useP9();
   const files = live?.files.length ? live.files : D.FILES;
@@ -127,24 +136,43 @@ export function Files() {
   const [fq, setFq] = useState('');
   const [q, setQ] = useState('');
   const [extra, setExtra] = useState<D.FileRow[]>([]);
+  const [folders, setFolders] = useState(D.FOLDERS);
+  const [naming, setNaming] = useState<string | null>(null);
+  // 新建文件夹：在当前一级文件夹下建子文件夹（选中「投标文件」时），否则建一级文件夹；建好后进入重命名
+  const newFolder = () => {
+    const parent = folders.find(f => f.name === folder);
+    const base = '新建文件夹';
+    const taken = new Set(folders.flatMap(f => [f.name, ...(f.subs || []).map(s => s[0])]));
+    let name = base; for (let i = 2; taken.has(name); i++) name = base + ' ' + i;
+    if (parent?.subs) { setFolders(fs => fs.map(f => f === parent ? { ...f, subs: [...(f.subs || []), [name, 0] as [string, number]] } : f)); setOpenF(s => new Set(s).add(parent.name)); setSub(name); }
+    else { setFolders(fs => [...fs, { name, count: 0 }]); setFolder(name); setSub(null); }
+    setNaming(name);
+  };
+  const rename = (from: string, to: string) => {
+    const v = to.trim(); setNaming(null);
+    if (!v || v === from) return;
+    setFolders(fs => fs.map(f => f.name === from ? { ...f, name: v } : { ...f, subs: f.subs?.map(s => s[0] === from ? [v, s[1]] as [string, number] : s) }));
+    if (folder === from) setFolder(v); if (sub === from) setSub(v);
+    notify(`已新建文件夹「${v}」`);
+  };
   const up = useRef<HTMLInputElement>(null);
   const all = [...extra, ...files];
   const rows = useMemo(() => all.filter(f => f.folder === folder && (!sub || f.sub === sub) && (!q || (f.name + f.who).includes(q))), [all, folder, sub, q]);
   return (
     <div className="p9-files">
       <section className="p9-card p9-folders">
-        <header className="p9-card-head"><div className="p9-card-head-left"><Folder size={13} className="ic-blue" /><h3>文件夹</h3><span className="p9-card-hint tone-blue">18</span></div><button type="button" className="p9-sq-btn is-xs" aria-label="新建文件夹" onClick={() => notify('已新建文件夹「未命名」')}><FolderPlus size={11} /></button></header>
+        <header className="p9-card-head"><div className="p9-card-head-left"><Folder size={13} className="ic-blue" /><h3>文件夹</h3><span className="p9-card-hint tone-blue">18</span></div><button type="button" className="p9-sq-btn is-xs" aria-label="新建文件夹" onClick={newFolder}><FolderPlus size={11} /></button></header>
         <label className="p9-search is-sm"><Search size={11} /><input value={fq} onChange={e => setFq(e.target.value)} placeholder="搜索文件夹、文件名" /></label>
         <div className="p9-tree is-folders">
-          {D.FOLDERS.filter(f => !fq || f.name.includes(fq) || f.subs?.some(([s]) => s.includes(fq))).map(f => {
+          {folders.filter(f => !fq || f.name.includes(fq) || f.subs?.some(([s]) => s.includes(fq))).map(f => {
             const open = openF.has(f.name);
             const on = folder === f.name && !sub;
             return (
               <React.Fragment key={f.name}>
-                <button type="button" className={cx('p9-tree-row', on && 'is-on')} onClick={() => { setFolder(f.name); setSub(null); setOpenF(s => { const n = new Set(s); n.has(f.name) ? n.delete(f.name) : n.add(f.name); return n; }); }}>
+                {naming === f.name ? <NameInput value={f.name} icon onDone={v => rename(f.name, v)} /> : <button type="button" className={cx('p9-tree-row', on && 'is-on')} onClick={() => { setFolder(f.name); setSub(null); setOpenF(s => { const n = new Set(s); n.has(f.name) ? n.delete(f.name) : n.add(f.name); return n; }); }}>
                   {open ? <FolderOpen size={12} /> : <Folder size={12} />}<span className="p9-grow">{f.name}</span><small>{f.count}</small>{f.subs ? (open ? <ChevronDown size={10} /> : <ChevronRight size={10} />) : <ChevronRight size={10} />}
-                </button>
-                {open && f.subs?.map(([s, n]) => <button type="button" key={s} className={cx('p9-tree-sub is-btn', folder === f.name && sub === s && 'is-on')} onClick={() => { setFolder(f.name); setSub(s); }}><i />{s}<span className="p9-grow" /><small>{n}</small></button>)}
+                </button>}
+                {open && f.subs?.map(([s, n]) => naming === s ? <NameInput key={s} value={s} onDone={v => rename(s, v)} /> : <button type="button" key={s} className={cx('p9-tree-sub is-btn', folder === f.name && sub === s && 'is-on')} onClick={() => { setFolder(f.name); setSub(s); }}><i />{s}<span className="p9-grow" /><small>{n}</small></button>)}
               </React.Fragment>
             );
           })}
@@ -154,12 +182,12 @@ export function Files() {
         <header className="p9-card-head">
           <div className="p9-card-head-left"><FolderOpen size={13} className="ic-blue" /><h3>{sub || folder}</h3><span className="p9-card-hint">{rows.length} 个文件{!sub && folder === '投标文件' ? ' · 4 个子文件夹' : ''}</span></div>
           <div className="p9-card-head-right">
-            <Btn kind="outline" size="sm" icon={FolderPlus} onClick={() => notify('已新建文件夹「未命名」')}>新建文件夹</Btn>
-            <input ref={up} type="file" hidden onChange={e => { const f = e.target.files?.[0]; if (!f) return; setExtra(x => [{ name: f.name, type: '投标文件', v: 'v1', size: (f.size / 1048576).toFixed(1) + ' MB', who: '我', time: '刚刚', status: '进行中', folder: '投标文件', sub: sub || '商务标', kind: f.name.endsWith('.xlsx') ? 'xls' : f.name.endsWith('.pdf') ? 'pdf' : 'doc' }, ...x]); notify('已上传，版本号 +1 并保留历史'); }} />
+            <Btn kind="outline" size="sm" icon={FolderPlus} onClick={newFolder}>新建文件夹</Btn>
+            <input ref={up} type="file" hidden onChange={e => { const f = e.target.files?.[0]; if (!f) return; setExtra(x => [{ name: f.name, type: '投标文件', v: 'v1', size: (f.size / 1048576).toFixed(1) + ' MB', who: '我', time: '刚刚', status: '进行中', folder, sub: sub || undefined, kind: f.name.endsWith('.xlsx') ? 'xls' : f.name.endsWith('.pdf') ? 'pdf' : 'doc' }, ...x]); notify('已上传，版本号 +1 并保留历史'); }} />
             <Btn kind="primary" size="sm" icon={Upload} onClick={() => up.current?.click()}>上传文件</Btn>
           </div>
         </header>
-        <div className="p9-search-line"><label className="p9-search is-wide"><Search size={12} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="搜索文件名、上传人" /><kbd>⌘K</kbd></label></div>
+        <div className="p9-search-line"><label className="p9-search is-wide"><Search size={12} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="搜索文件名、上传人" /></label></div>
         <div className="p9-table" style={{ '--cols': 'minmax(0,1fr) 60px 44px 52px 52px 70px 44px' } as React.CSSProperties}>
           <div className="p9-tr is-head">{['文件名', '类型', '版本', '大小', '上传人', '更新时间', '状态'].map(h => <div key={h} className="p9-th">{h}</div>)}</div>
           {rows.map(f => (

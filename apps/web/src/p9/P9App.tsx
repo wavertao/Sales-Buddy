@@ -8,17 +8,17 @@ import { DetailHeader, Dock, Sidebar } from './shell';
 import { Toast } from './ui';
 import { BidList, EntryModals, OppBids } from './screens/list';
 import { Cockpit } from './screens/cockpit';
-import { AdvanceModal, Basic, Strategy } from './screens/basic';
+import { AdvanceModal, Basic, RollbackModal, RoundModal, Strategy } from './screens/basic';
 import { Plan } from './screens/plan';
 import { Docs } from './screens/docs';
 import { Files, Meetings } from './screens/meetings';
-import { CommentModal, CompleteModal, Todos } from './screens/todos';
+import { ClarCommentModal, CommentModal, CompleteModal, Todos } from './screens/todos';
 import { Bafo, Review, Submit } from './screens/submit';
 import { Mobile } from './screens/mobile';
 import { Clock3, Sparkles } from 'lucide-react';
 
 function Detail() {
-  const { tab, modal, meetingId } = useP9();
+  const { tab, modal, meetingId, dockOpen, setDockOpen } = useP9();
   const body = {
     cockpit: <Cockpit />, basic: <Basic />, strategy: <Strategy />, plan: <Plan />, docs: <Docs />, meetings: <Meetings />,
     files: <Files />, todos: <Todos />, submit: <Submit />, bafo: <Bafo />, review: <Review />,
@@ -26,7 +26,7 @@ function Detail() {
   // 会议详情顶栏右侧显示会议时间（设计稿 P9.5.2）
   const right = tab === 'meetings' && meetingId ? <>
     <span className="p9-time-pill is-gray"><Clock3 size={11} />10-25 10:00–11:20</span>
-    <button type="button" className="p9-ai-btn" onClick={() => document.querySelector<HTMLTextAreaElement>('.p9-dock textarea')?.focus()}><Sparkles size={13} />和纵横对话</button>
+    <button type="button" className={'p9-ai-btn' + (dockOpen ? ' is-on' : '')} onClick={() => setDockOpen(!dockOpen)}><Sparkles size={13} />和纵横对话</button>
   </> : undefined;
   return (
     <div className="p9-page">
@@ -39,6 +39,9 @@ function Detail() {
         </div>
       </main>
       {modal?.kind === 'advance' && <AdvanceModal />}
+      {modal?.kind === 'rollback' && <RollbackModal to={modal.to} />}
+      {modal?.kind === 'round' && <RoundModal dir={modal.dir} />}
+      {modal?.kind === 'clarComment' && <ClarCommentModal clarId={modal.clarId} />}
       {modal?.kind === 'complete' && <CompleteModal todoId={modal.todoId} />}
       {modal?.kind === 'comment' && <CommentModal todoId={modal.todoId} />}
       {(modal?.kind === 'create' || modal?.kind === 'created') && <EntryModals />}
