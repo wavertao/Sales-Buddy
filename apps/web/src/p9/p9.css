@@ -888,3 +888,21 @@ button.m9-round { color: var(--text); }
 .p9-outcomes.is-2 { grid-template-columns: 1fr 1fr; }
 .p9-outcomes.is-2 button.is-on { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
 .p9-outcomes.is-2 button.is-on .p9-radio { border: 3px solid var(--primary); }
+/* 甘特：左侧信息列固定（sticky），右侧按真实日期横向滚动；WK = 当年度 ISO 周 */
+.p9-gantt-tools { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 9.5px; flex-wrap: wrap; }
+.p9-gantt-tools .p9-seg button:disabled { opacity: .4; }
+.p9-gantt-scroll { overflow-x: auto; overflow-y: hidden; position: relative; }
+.p9-gr { display: grid; min-width: max-content; border-bottom: 1px solid var(--border); font-size: 10px; min-height: 34px; }
+.p9-gr.is-head { min-height: 32px; color: var(--text-2); font-size: 9.5px; font-weight: 600; }
+.p9-gr.is-40 { min-height: 40px; } .p9-gr.is-44 { min-height: 44px; }
+.p9-gl { position: sticky; left: 0; z-index: 3; background: var(--card); display: grid; grid-template-columns: var(--left); gap: 6px; align-items: center; padding: 0 12px; box-shadow: 1px 0 0 var(--border); }
+.p9-gr.is-dragging .p9-gl { opacity: .4; }
+.p9-gr.is-drop { box-shadow: inset 0 2px 0 var(--primary); }
+.p9-weeks.is-px { display: flex; align-items: stretch; }
+.p9-weeks.is-px span { flex: none; display: flex; flex-direction: column; justify-content: center; padding-left: 5px; box-shadow: inset 1px 0 0 var(--border); cursor: default; line-height: 1.2; }
+.p9-weeks.is-px span small { font-size: 7.5px; font-weight: 400; color: #B4B4C3; }
+.p9-weeks.is-px span.is-now { color: var(--primary); background: var(--primary-light); }
+.p9-weeks.is-px span:hover { background: var(--bg); color: var(--text); }
+.p9-gantt-track.is-px { position: relative; height: 100%; min-height: 28px; background-image: linear-gradient(to right, var(--border) 1px, transparent 1px); background-repeat: repeat; }
+.p9-today { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed var(--red); opacity: .6; pointer-events: none; z-index: 1; }
+.p9-gantt-track.is-px .p9-gantt-bar { z-index: 2; }
