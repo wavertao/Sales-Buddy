@@ -1,5 +1,5 @@
 // P9.2.1 基本信息（ATB 评审表 + 投标轮次）· P9.2.2 投标策略 · P9.2.3 节点推进确认弹窗
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, ChevronsRight, ClipboardList, Mic, RefreshCw, Sparkles, Target, ArrowRight, Undo2, TriangleAlert, PenLine } from 'lucide-react';
 import * as D from '../demo';
 import { useP9 } from '../store';
@@ -182,6 +182,24 @@ export function Strategy() {
   );
 }
 
+/** 节点弹窗定位：贴在被点节点的正下方、左缘对齐节点；靠右放不下时向左收，始终留 12px 边距。窗口缩放时重算。 */
+function usePopPos(index: number, width: number) {
+  const calc = () => {
+    const el = document.querySelectorAll<HTMLElement>('.p9-node')[index];
+    if (!el) return { left: 12, top: 129 };
+    const r = el.getBoundingClientRect();
+    return { left: Math.max(12, Math.min(r.left, window.innerWidth - width - 12)), top: r.bottom + 8 };
+  };
+  const [pos, setPos] = useState(calc);
+  useLayoutEffect(() => {
+    const on = () => setPos(calc());
+    on(); window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, width]);
+  return pos;
+}
+
 /** P9.2.3：点节点条当前阶段弹出，贴在节点条下方、无遮罩。 */
 export function AdvanceModal() {
   const { node, setModal, advanceNode } = useP9();
@@ -189,7 +207,7 @@ export function AdvanceModal() {
   const next = Math.min(9, node + 1);
   return (
     <div className="p9-pop-layer" onClick={() => setModal(null)}>
-      <div className="p9-modal is-pop" style={{ width: 520, left: 228 + Math.max(0, node - 2) * 104 }} onClick={e => e.stopPropagation()} role="dialog" aria-label="推进到下一节点">
+      <div className="p9-modal is-pop" style={{ width: 520, ...usePopPos(node, 520) }} onClick={e => e.stopPropagation()} role="dialog" aria-label="推进到下一节点">
         <header className="p9-modal-head"><ChevronsRight size={15} className="ic-blue" /><h3>推进到下一节点</h3><span className="p9-grow" /><button type="button" className="p9-modal-x" onClick={() => setModal(null)} aria-label="关闭">×</button></header>
         <div className="p9-modal-body is-gap12">
           <div className="p9-flow">
@@ -220,7 +238,7 @@ export function RollbackModal({ to }: { to: number }) {
   const lost = D.NODES.slice(to + 1, node + 1);
   return (
     <div className="p9-pop-layer" onClick={() => setModal(null)}>
-      <div className="p9-modal is-pop" style={{ width: 520, left: Math.max(0, to * 104 - 60) }} onClick={e => e.stopPropagation()} role="dialog" aria-label="回退到此节点">
+      <div className="p9-modal is-pop" style={{ width: 520, ...usePopPos(to, 520) }} onClick={e => e.stopPropagation()} role="dialog" aria-label="回退到此节点">
         <header className="p9-modal-head"><Undo2 size={15} className="ic-orange" /><h3>回退到「{D.NODE_NO[to]} {D.NODES[to]}」</h3><span className="p9-grow" /><button type="button" className="p9-modal-x" onClick={() => setModal(null)} aria-label="关闭">×</button></header>
         <div className="p9-modal-body is-gap12">
           <div className="p9-flow">

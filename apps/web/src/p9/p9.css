@@ -304,7 +304,7 @@
 .p9-warn-line { display: flex; gap: 6px; align-items: flex-start; font-size: 9px; color: var(--text-2); line-height: 1.5; }
 .p9-warn-line svg { color: var(--orange); flex: none; margin-top: 2px; }
 .p9-pop-layer { position: fixed; inset: 0; z-index: 50; }
-.p9-modal.is-pop { position: absolute; top: 129px; margin-left: 320px; }
+.p9-modal.is-pop { position: fixed; max-height: calc(100vh - 24px); }
 
 /* ---------- 驾驶舱 ---------- */
 .p9-cockpit { display: flex; flex-direction: column; gap: 12px; }
