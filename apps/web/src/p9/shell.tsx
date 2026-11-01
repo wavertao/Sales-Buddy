@@ -1,7 +1,7 @@
 // P9 布局外壳：左侧栏（对话记录 + 功能板块）、详情页顶栏 / 节点条 / Tab 行、右侧常驻投标助理。
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, ArrowUp, AtSign, Bot, CalendarDays, Check, ChevronRight, ChevronUp, ChevronsLeft, ChevronsRight, Clock3, Compass, FileText, Gavel,
+  ArrowLeft, ArrowUp, AtSign, Bot, CalendarDays, Check, ChevronRight, ChevronUp, ChevronsRight, Clock3, Compass, FileText, Gavel,
   LayoutGrid, Lightbulb, MessageSquare, Mic, PanelLeft, Plus, Radar, Settings, Sparkles, SquarePen, BriefcaseBusiness, TrendingUp, Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -114,7 +114,7 @@ const REPLIES: [RegExp, string][] = [
 
 /** 右侧常驻投标助理。variant="cockpit" 为驾驶舱的渐变头像 + 会话版；其余屏为上下文条 + 快捷问。 */
 export function Dock({ variant = 'default', context, initial }: { variant?: 'default' | 'cockpit'; context?: { badges: string[]; note: string }; initial?: D.ChatMsg[] }) {
-  const { bid, call, live, dockOpen, setDockOpen, todos } = useP9();
+  const { bid, call, live, dockOpen, setDockOpen } = useP9();
   const [msgs, setMsgs] = useState<D.ChatMsg[]>(initial ?? [D.DOCK_WELCOME]);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
@@ -131,18 +131,8 @@ export function Dock({ variant = 'default', context, initial }: { variant?: 'def
     setMsgs(m => [...m, { who: 'ai', text: r?.reply || r?.answer || canned, meta: now + ' · 已引用本标数据' }]);
     setBusy(false);
   };
-  if (!dockOpen) {
-    // 收起态：44px 竖条（设计稿组件「投标助理 Dock · 收起」），不展示对话内容
-    const open = todos.filter(t => t.overdue && t.status !== '已完成').length;
-    return (
-      <aside className="p9-dock-rail" aria-label="投标助理（已收起）">
-        <button type="button" className="p9-dock-av" onClick={() => setDockOpen(true)} title="展开投标助理"><Bot size={15} /></button>
-        <button type="button" className="p9-dock-btn" onClick={() => setDockOpen(true)} aria-label="展开投标助理"><ChevronsLeft size={13} /></button>
-        <span className="p9-grow" />
-        {open > 0 && <span className="p9-rail-badge" title={open + ' 条逾期待办'}>{open}</span>}
-      </aside>
-    );
-  }
+  // 收起态不占位，点顶栏「和纵横对话」展开
+  if (!dockOpen) return null;
   const ctx = context ?? { badges: [`${bid.number} · R2`, '节点 ③ 标书分解', `健康度 ${live?.health?.score ?? 68}`], note: '已接入：健康度 / 卡点 / 逾期任务 / 澄清 · 实时' };
   return (
     <aside className={cx('p9-dock', 'is-' + variant)}>

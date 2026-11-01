@@ -1,6 +1,6 @@
 // P9.0 入口层：投标列表、商机详情 · 投标 Tab、发起投标（填写 → 结果）、搜索字段面板。
 import React, { useMemo, useState } from 'react';
-import { ArrowDownWideNarrow, ArrowLeft, ArrowRight, Bell, Check, ChevronDown, ChevronRight, ChevronUp, CircleAlert, CircleCheck, Ellipsis, History, Lock, PenLine, Plus, Search, Send, Smartphone, Users, X } from 'lucide-react';
+import { ArrowDownWideNarrow, ArrowLeft, ArrowRight, Bell, Check, ChevronDown, ChevronRight, ChevronUp, CircleAlert, CircleCheck, Ellipsis, History, Lock, PenLine, Plus, Search, Send, Smartphone, Sparkles, Users, X } from 'lucide-react';
 import * as D from '../demo';
 import { useP9 } from '../store';
 import { Dock, Sidebar } from '../shell';
@@ -61,7 +61,7 @@ function SortMenu({ value, onChange }: { value: string; onChange: (v: string) =>
 }
 
 export function BidList() {
-  const { bids, openBid, setModal, setView } = useP9();
+  const { bids, openBid, setModal, setView, dockOpen, setDockOpen } = useP9();
   const [filter, setFilter] = useState('全部');
   const [q, setQ] = useState('');
   const [searching, setSearching] = useState(false);
@@ -84,6 +84,7 @@ export function BidList() {
               <label className={cx('p9-search', searching && 'is-focus')}><Search size={13} /><input value={q} onFocus={() => setSearching(true)} onChange={e => setQ(e.target.value)} placeholder="搜索客户 / 项目名称" /></label>
               {searching && <SearchPanel onClose={() => setSearching(false)} onSearch={setQ} />}
             </div>
+            <button type="button" className={cx('p9-ai-btn', dockOpen && 'is-on')} onClick={() => setDockOpen(!dockOpen)} aria-pressed={dockOpen}><Sparkles size={13} />和纵横对话</button>
             <Btn kind="primary" icon={Plus} onClick={() => setModal({ kind: 'create' })}>新建投标</Btn>
           </div>
         </div>
@@ -135,7 +136,7 @@ export function BidList() {
 
 /** P9.0.2 商机详情 · 投标 Tab */
 export function OppBids() {
-  const { openBid, setModal, setView, notify, bids } = useP9();
+  const { openBid, setModal, setView, notify, bids, dockOpen, setDockOpen } = useP9();
   const [tab, setTab] = useState('投标');
   return (
     <div className="p9-page">
@@ -148,6 +149,7 @@ export function OppBids() {
             <span className="p9-status-pill"><i />{D.OPP.stage}</span><span className="p9-muted-105">{D.OPP.spec}</span>
           </div>
           <div className="p9-topbar-right">
+            <button type="button" className={cx('p9-ai-btn', dockOpen && 'is-on')} onClick={() => setDockOpen(!dockOpen)} aria-pressed={dockOpen}><Sparkles size={13} />和纵横对话</button>
             <button type="button" className="p9-group-btn" onClick={() => notify('已发起建群：SPP 团队 6 人已拉入钉钉群')}><Users size={13} />一键建群</button>
             <button type="button" className="p9-sq-btn" aria-label="通知"><Bell size={15} /></button>
             <button type="button" className="p9-sq-btn" aria-label="更多"><Ellipsis size={15} /></button>
