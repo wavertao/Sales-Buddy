@@ -1,11 +1,11 @@
 // P9 演示种子写入（协调人集成文件）。
-// 来源：fixtures/p9/*.json（数据组）+ apps/web/src/p9/data.ts（前端演示数据，保证前端本地 ID 与后端记录对齐）。
+// 来源：fixtures/p9/*.json（数据组）+ seed-frontend.ts（前端演示数据，保证前端本地 ID 与后端记录对齐）。
 // 幂等：以 meta p9SeedVersion 为准，已写入则跳过；失败只告警不阻断服务器启动。
 // 注意：演示数据 only；生产路径不受影响；不含任何密钥与金额字段（报价版本只含商业条款）。
 import { saveRecord, setMeta, meta, now } from '../db.ts';
 import { getP9Seed } from './seed-data.ts';
 import { CHECKLIST_TEMPLATES } from '../../../../packages/contracts/p9.ts';
-import { BIDS, OPP_BIDS, PLAN_ITEMS, TODOS } from '../../../web/src/p9/data.ts';
+import { BIDS, OPP_BIDS, PLAN_ITEMS, TODOS } from './seed-frontend.ts';
 
 export const P9_SEED_VERSION = '2026.10.29-p9-v2';
 const MAIN_BID = 'BID-20261010-003';
