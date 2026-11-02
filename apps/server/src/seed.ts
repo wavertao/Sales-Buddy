@@ -2,7 +2,7 @@ import {ensureLinkedFixtures} from './mock-fixtures-v2.ts';
 import {db,now,saveRecord,setMeta,put,record} from './db.ts';
 import {stageNames} from '../../../packages/contracts/index.ts';
 export const seedVersion='2026.10.27-v2-linked';
-export const userSeeds=[{id:'U-018',name:'张小小',role:'sales',teamId:'TEAM-A'},{id:'U-019',name:'李明',role:'sales',teamId:'TEAM-B'},{id:'U-020',name:'王经理',role:'manager',teamId:'TEAM-A'},{id:'U-ADMIN',name:'演示管理员',role:'admin',teamId:'ADMIN'}];
+export const userSeeds=[{id:'U-018',name:'张小小',role:'sales',teamId:'TEAM-A'},{id:'U-019',name:'李明',role:'sales',teamId:'TEAM-B'},{id:'U-020',name:'王经理',role:'manager',teamId:'TEAM-A'},{id:'U-ADMIN',name:'演示管理员',role:'admin',teamId:'ADMIN'},{id:'U-021',name:'王强',role:'sales',teamId:'TEAM-A'},{id:'U-022',name:'陈磊',role:'sales',teamId:'TEAM-A'},{id:'U-023',name:'王芳',role:'sales',teamId:'TEAM-A'},{id:'U-024',name:'张伟',role:'sales',teamId:'TEAM-A'}];
 export const customers=[
 ['C-UK-0086','Northstar Energy','英国','GB','欧洲','开发商','utility_scale'],
 ['C-DE-002','Rheinpark Manufacturing','德国','DE','欧洲','业主','commercial_industrial'],

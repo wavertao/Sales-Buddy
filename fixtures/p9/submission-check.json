@@ -1,0 +1,151 @@
+{
+  "bidId": "BID-20261010-003",
+  "checklist": [
+    {
+      "id": "CK-01",
+      "item": "投标保证金500万元·保函BZ-2026-0193",
+      "status": "passed"
+    },
+    {
+      "id": "CK-02",
+      "item": "份数：正本1份·副本4份·电子件齐备",
+      "status": "passed"
+    },
+    {
+      "id": "CK-03",
+      "item": "递交方式与地点：现场递交·宁德市公共资源交易中心·递交人李明",
+      "status": "passed"
+    },
+    {
+      "id": "CK-04",
+      "item": "签字与密封：骑缝章与法人章符合招标要求",
+      "status": "pending"
+    },
+    {
+      "id": "CK-05",
+      "item": "交标凭证上传",
+      "status": "pending"
+    },
+    {
+      "id": "CK-06",
+      "item": "技术标强制响应：UL9540A报告",
+      "status": "missing"
+    },
+    {
+      "id": "CK-07",
+      "item": "商务标v2与技术标v3版本一致",
+      "status": "passed"
+    },
+    {
+      "id": "CK-08",
+      "item": "报价表v1版本一致",
+      "status": "passed"
+    },
+    {
+      "id": "CK-09",
+      "item": "资质与业绩清单已定稿",
+      "status": "passed"
+    },
+    {
+      "id": "CK-10",
+      "item": "澄清答复已同步进标书",
+      "status": "passed"
+    },
+    {
+      "id": "CK-11",
+      "item": "偏差表口径一致",
+      "status": "passed"
+    },
+    {
+      "id": "CK-12",
+      "item": "付款节点口径一致",
+      "status": "passed"
+    },
+    {
+      "id": "CK-13",
+      "item": "质保口径一致",
+      "status": "passed"
+    },
+    {
+      "id": "CK-14",
+      "item": "交付周期承诺已确认",
+      "status": "passed"
+    }
+  ],
+  "customerRequirements": [
+    {
+      "id": "RQ-01",
+      "requirement": "付款节点符合客户要求",
+      "status": "deviation"
+    },
+    {
+      "id": "RQ-02",
+      "requirement": "质保年限符合客户要求",
+      "status": "passed"
+    },
+    {
+      "id": "RQ-03",
+      "requirement": "交付周期符合客户要求",
+      "status": "passed"
+    },
+    {
+      "id": "RQ-04",
+      "requirement": "技术标准符合客户要求",
+      "status": "passed"
+    },
+    {
+      "id": "RQ-05",
+      "requirement": "售后服务年限符合客户要求",
+      "status": "passed"
+    },
+    {
+      "id": "RQ-06",
+      "requirement": "投标保证金形式符合客户要求",
+      "status": "passed"
+    },
+    {
+      "id": "RQ-07",
+      "requirement": "份数符合客户要求",
+      "status": "passed"
+    },
+    {
+      "id": "RQ-08",
+      "requirement": "递交方式符合客户要求",
+      "status": "passed"
+    }
+  ],
+  "fourSourceSummary": {
+    "todos": "12项待办·2条未闭环：技术标强制响应/报价过BSD",
+    "clarifications": "8条澄清·3条超48h未回：答疑第4/7条",
+    "checklist": "14项·技术标强制响应缺1项（UL9540A报告）",
+    "customerRequirements": "8项·付款节点3-3-4与客户要求3-4-3偏差"
+  },
+  "finalChecklist5": [
+    {
+      "item": "投标保证金",
+      "detail": "500万元·保函编号BZ-2026-0193，已缴纳/保函已开",
+      "status": "passed"
+    },
+    {
+      "item": "份数",
+      "detail": "正本1份·副本4份·电子件（U盘）齐备",
+      "status": "passed"
+    },
+    {
+      "item": "递交方式与地点",
+      "detail": "现场递交·宁德市公共资源交易中心·递交人李明",
+      "status": "passed"
+    },
+    {
+      "item": "签字与密封",
+      "detail": "需检查骑缝章与法人章，密封与签章须符合招标要求",
+      "status": "pending"
+    },
+    {
+      "item": "交标凭证",
+      "detail": "上传后节点⑦自动完成，并回写交标时间",
+      "status": "pending"
+    }
+  ],
+  "conclusion": "风险：中·不建议现在交标"
+}

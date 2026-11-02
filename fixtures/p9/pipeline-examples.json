@@ -1,0 +1,87 @@
+{
+  "bidId": "BID-20261010-003",
+  "states": [
+    "idle",
+    "planning",
+    "plan_draft",
+    "decomposing",
+    "dispatched",
+    "executing",
+    "checking",
+    "review",
+    "submitted"
+  ],
+  "transitionNote": "idle→planning→plan_draft→decomposing→dispatched→executing→checking→review→submitted；检查不通过：checking→executing；任何态可暂停（paused=true），恢复后回原态。",
+  "examples": [
+    {
+      "bidId": "BID-20261010-003",
+      "state": "idle",
+      "label": "投标创建前/未启动",
+      "paused": false,
+      "updatedAt": "2026-10-24T09:40:00+08:00"
+    },
+    {
+      "bidId": "BID-20261010-003",
+      "state": "planning",
+      "label": "AI正在排计划",
+      "paused": false,
+      "updatedAt": "2026-10-24T09:40:00+08:00"
+    },
+    {
+      "bidId": "BID-20261010-003",
+      "state": "plan_draft",
+      "label": "AI计划草稿已生成待确认",
+      "paused": false,
+      "updatedAt": "2026-10-24T09:40:00+08:00"
+    },
+    {
+      "bidId": "BID-20261010-003",
+      "state": "decomposing",
+      "label": "AI正在拆标书并更新计划",
+      "paused": false,
+      "updatedAt": "2026-10-24T09:40:00+08:00"
+    },
+    {
+      "bidId": "BID-20261010-003",
+      "state": "dispatched",
+      "label": "已确认并下发：任务/待办已生成",
+      "paused": false,
+      "updatedAt": "2026-10-24T09:40:00+08:00"
+    },
+    {
+      "bidId": "BID-20261010-003",
+      "state": "executing",
+      "label": "执行中：任务推进与提醒",
+      "paused": false,
+      "updatedAt": "2026-10-24T09:40:00+08:00"
+    },
+    {
+      "bidId": "BID-20261010-003",
+      "state": "checking",
+      "label": "全部完成，AI自动检查中",
+      "paused": false,
+      "updatedAt": "2026-10-24T09:40:00+08:00"
+    },
+    {
+      "bidId": "BID-20261010-003",
+      "state": "review",
+      "label": "检查通过，人工复查中",
+      "paused": false,
+      "updatedAt": "2026-10-24T09:40:00+08:00"
+    },
+    {
+      "bidId": "BID-20261010-003",
+      "state": "submitted",
+      "label": "已交标",
+      "paused": false,
+      "updatedAt": "2026-10-24T09:40:00+08:00"
+    },
+    {
+      "bidId": "BID-20261010-003",
+      "state": "executing",
+      "label": "执行中（已暂停）",
+      "paused": true,
+      "updatedAt": "2026-10-24T10:00:00+08:00"
+    }
+  ]
+}

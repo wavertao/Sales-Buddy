@@ -1,0 +1,78 @@
+{
+  "bidId": "BID-20261010-003",
+  "clarifications": [
+    {
+      "id": "CL-01",
+      "type": "技术",
+      "phase": "pre-bid",
+      "question": "澄清4.2节：是否接受远程调试？",
+      "owner": "陈磊",
+      "due": "2026-10-25",
+      "status": "pending"
+    },
+    {
+      "id": "CL-02",
+      "type": "商务",
+      "phase": "post-bid",
+      "question": "质保年限可否延长至10年？",
+      "owner": "王芳",
+      "due": "2026-10-26",
+      "status": "pending"
+    },
+    {
+      "id": "CL-03",
+      "type": "偏差",
+      "phase": "pre-bid",
+      "question": "付款节点能否接受3-4-3？",
+      "owner": "王芳",
+      "due": "2026-10-25",
+      "status": "answered"
+    },
+    {
+      "id": "CL-04",
+      "type": "技术",
+      "phase": "post-bid",
+      "question": "BESS台数由20台优化为18台是否可行？",
+      "owner": "陈磊",
+      "due": "2026-10-28",
+      "status": "pending"
+    },
+    {
+      "id": "CL-05",
+      "type": "商务",
+      "phase": "pre-bid",
+      "question": "投标保证金能否用保函替代？",
+      "owner": "李明",
+      "due": "2026-10-24",
+      "status": "answered"
+    },
+    {
+      "id": "CL-06",
+      "type": "技术",
+      "phase": "pre-bid",
+      "question": "消防认证UL9540A报告是否必须随标附带？",
+      "owner": "陈磊",
+      "due": "2026-10-26",
+      "status": "answered"
+    },
+    {
+      "id": "CL-07",
+      "type": "商务",
+      "phase": "post-bid",
+      "question": "付款节点3-3-4是否可作为BAFO口径？",
+      "owner": "王芳",
+      "due": "2026-10-27",
+      "status": "answered"
+    },
+    {
+      "id": "CL-08",
+      "type": "偏差",
+      "phase": "post-bid",
+      "question": "质保范围是否含延保服务？",
+      "owner": "王芳",
+      "due": "2026-10-28",
+      "status": "answered"
+    }
+  ],
+  "countsNote": "8条：未闭环（pending）3条，已答复5条，pre-bid 4条，post-bid 4条。"
+}

@@ -1,0 +1,421 @@
+{
+  "id": "BID-20261010-003",
+  "displayId": "BID-20261010-003 · R2",
+  "customer": "宁德时代",
+  "customerFullName": "宁德时代新能源",
+  "opportunity": "储能项目",
+  "opportunityStage": "S4商务谈判",
+  "winRate": 75,
+  "capacity": "200 MW / 400 MWh",
+  "businessMode": "DC Block直采",
+  "currentRound": "R2",
+  "currentNode": 2,
+  "currentNodeDisplay": "节点 ③ 标书分解",
+  "status": "进行中",
+  "owner": "王强",
+  "ownerRole": "PM",
+  "initiator": "李明",
+  "initiatedAt": "2026-10-10",
+  "team": "储能SPP",
+  "submissionDeadline": "2026-11-05T14:00:00+08:00",
+  "demoClock": "2026-10-24",
+  "demoClockNote": "P9演示时钟固定2026-10-24，只用于P9相对标签（距交标12天等），绝不改全局BUSINESS_CLOCK。",
+  "health": {
+    "score": 68,
+    "safetyLine": 80,
+    "changeVsYesterday": -4,
+    "dimensions": {
+      "进度排期": 82,
+      "商务部分": 76,
+      "技术部分": 55,
+      "报价文件": 64,
+      "偏差管理": 61,
+      "澄清响应": 67
+    }
+  },
+  "deposit": {
+    "amountText": "500万元（2%）",
+    "guaranteeNo": "BZ-2026-0193",
+    "status": "已缴纳/保函已开"
+  },
+  "nodeTimeline": [
+    {
+      "node": 0,
+      "name": "商机判断",
+      "date": "10-10",
+      "status": "done"
+    },
+    {
+      "node": 1,
+      "name": "投标策略",
+      "date": "10-12",
+      "status": "done"
+    },
+    {
+      "node": 2,
+      "name": "标书分解",
+      "date": null,
+      "status": "in_progress"
+    },
+    {
+      "node": 3,
+      "name": "开工会",
+      "date": "预计10-22",
+      "status": "pending"
+    },
+    {
+      "node": 4,
+      "name": "澄清跟进",
+      "date": "预计10-25",
+      "status": "pending"
+    },
+    {
+      "node": 5,
+      "name": "投标文件制作",
+      "date": "预计10-26",
+      "status": "pending"
+    },
+    {
+      "node": 6,
+      "name": "交标",
+      "date": "2026-11-05 14:00",
+      "status": "pending"
+    },
+    {
+      "node": 7,
+      "name": "澄清环节跟进",
+      "date": "待定",
+      "status": "pending"
+    },
+    {
+      "node": 8,
+      "name": "BAFO",
+      "date": "待定",
+      "status": "pending"
+    },
+    {
+      "node": 9,
+      "name": "定标",
+      "date": "待定",
+      "status": "pending"
+    }
+  ],
+  "atbAsOf": "2026-10-24T09:40:00+08:00",
+  "atbNote": "ATB快照时点09:40为21/43；待办“补齐3个基本信息字段”于同日16:32完成（含保证金补填），属快照后进展，ATB计数不因此改写，快照口径以本文件为准。",
+  "atb": [
+    {
+      "group": "basic",
+      "id": "ATB-B01",
+      "field": "商机名称",
+      "value": "宁德时代·储能项目",
+      "status": "filled"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B02",
+      "field": "国家",
+      "value": "中国",
+      "status": "filled"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B03",
+      "field": "省州",
+      "value": "福建省",
+      "status": "filled"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B04",
+      "field": "详细地址",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B05",
+      "field": "经纬度",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B06",
+      "field": "风光配储",
+      "value": "是·风光储一体",
+      "status": "filled"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B07",
+      "field": "项目应用类型",
+      "value": "用户侧储能",
+      "status": "filled"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B08",
+      "field": "产品终端一级应用",
+      "value": "工商业储能",
+      "status": "filled"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B09",
+      "field": "客户名称",
+      "value": "宁德时代新能源",
+      "status": "filled"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B10",
+      "field": "客户角色",
+      "value": "业主/IPP",
+      "status": "filled"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B11",
+      "field": "招标对象",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B12",
+      "field": "招标形式",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B13",
+      "field": "AC/DC",
+      "value": "DC侧",
+      "status": "filled"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B14",
+      "field": "开标时间",
+      "value": "2026-11-05 14:00",
+      "status": "filled"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B15",
+      "field": "并网时间",
+      "value": "2027-06",
+      "status": "filled"
+    },
+    {
+      "group": "basic",
+      "id": "ATB-B16",
+      "field": "投标保证金",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "business",
+      "id": "ATB-C01",
+      "field": "友商参与情况",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "business",
+      "id": "ATB-C02",
+      "field": "质保年限",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "business",
+      "id": "ATB-C03",
+      "field": "质保范围",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "business",
+      "id": "ATB-C04",
+      "field": "付款节点",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "business",
+      "id": "ATB-C05",
+      "field": "是否需要审核合同",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "business",
+      "id": "ATB-C06",
+      "field": "违约责任及比例",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "business",
+      "id": "ATB-C07",
+      "field": "报价币种",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "technical",
+      "id": "ATB-T01",
+      "field": "AC侧方案",
+      "value": "需要·AC集成",
+      "status": "filled"
+    },
+    {
+      "group": "technical",
+      "id": "ATB-T02",
+      "field": "BESS选型",
+      "value": "5MWh液冷柜",
+      "status": "filled"
+    },
+    {
+      "group": "technical",
+      "id": "ATB-T03",
+      "field": "BESS台数",
+      "value": "80台",
+      "status": "filled"
+    },
+    {
+      "group": "technical",
+      "id": "ATB-T04",
+      "field": "PCS选型",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "technical",
+      "id": "ATB-T05",
+      "field": "PCS台数",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "technical",
+      "id": "ATB-T06",
+      "field": "EMS选型",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "technical",
+      "id": "ATB-T07",
+      "field": "产品年限",
+      "value": "25年",
+      "status": "filled"
+    },
+    {
+      "group": "technical",
+      "id": "ATB-T08",
+      "field": "产品标准响应要求",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "technical",
+      "id": "ATB-T09",
+      "field": "电芯能量密度要求",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "technical",
+      "id": "ATB-T10",
+      "field": "指定产品供应商",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "afterSales",
+      "id": "ATB-A01",
+      "field": "售后服务需求范围",
+      "value": "含5年运维",
+      "status": "filled"
+    },
+    {
+      "group": "afterSales",
+      "id": "ATB-A02",
+      "field": "售后服务年限需求",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "afterSales",
+      "id": "ATB-A03",
+      "field": "售后培训需求",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "afterSales",
+      "id": "ATB-A04",
+      "field": "可利用率需求",
+      "value": null,
+      "status": "gap"
+    },
+    {
+      "group": "team",
+      "id": "ATB-S01",
+      "field": "SLS销售负责人",
+      "value": "李明",
+      "status": "filled"
+    },
+    {
+      "group": "team",
+      "id": "ATB-S02",
+      "field": "PM项目经理",
+      "value": "王强",
+      "status": "filled"
+    },
+    {
+      "group": "team",
+      "id": "ATB-S03",
+      "field": "SC方案工程师",
+      "value": "陈磊",
+      "status": "filled"
+    },
+    {
+      "group": "team",
+      "id": "ATB-S04",
+      "field": "QA质量",
+      "value": "张伟",
+      "status": "filled"
+    },
+    {
+      "group": "team",
+      "id": "ATB-S05",
+      "field": "AMD交付",
+      "value": "王芳",
+      "status": "filled"
+    },
+    {
+      "group": "team",
+      "id": "ATB-S06",
+      "field": "售前ID",
+      "value": null,
+      "status": "gap"
+    }
+  ],
+  "strategyFields": {
+    "业务模式": "DC Block直采",
+    "装机容量": "200 MW / 400 MWh",
+    "交货期": "2027 Q2分批",
+    "采购方式": "公开招标·两阶段",
+    "评标办法": "技术60/商务40",
+    "决策链": "技术中心→采购→投决",
+    "价值主线": "全生命周期IRR/LTSA",
+    "差异化": "10年质保+备件2年",
+    "主要对手": "阳光电源/比亚迪",
+    "合规底线": "不含EPC与土建"
+  },
+  "strategyPriceNote": "报价姿态与让价空间不在本种子与Mock输出范围内：报价是敏感动作，由报价管理部门执行，纵横不做报价决策、不给报价建议（见报价gating）。"
+}

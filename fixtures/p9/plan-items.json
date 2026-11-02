@@ -1,0 +1,347 @@
+{
+  "bidId": "BID-20261010-003",
+  "total": 34,
+  "items": [
+    {
+      "id": "BI-01",
+      "title": "4.1 储能系统技术规格书响应",
+      "category": "技术",
+      "owner": "王强",
+      "start": "2026-10-20",
+      "end": "2026-10-23",
+      "status": "in_progress",
+      "sourceClause": "第四章 4.1"
+    },
+    {
+      "id": "BI-02",
+      "title": "4.2 并网性能与涉网要求",
+      "category": "技术",
+      "owner": "陈磊",
+      "start": "2026-10-21",
+      "end": "2026-10-25",
+      "status": "pending",
+      "sourceClause": "第四章 4.2"
+    },
+    {
+      "id": "BI-03",
+      "title": "4.3 消防与安全认证",
+      "category": "技术",
+      "owner": null,
+      "start": "2026-10-22",
+      "end": "2026-10-26",
+      "status": "blocked",
+      "sourceClause": "第四章 4.3"
+    },
+    {
+      "id": "BI-04",
+      "title": "4.4 技术要求响应项4",
+      "category": "技术",
+      "owner": "陈磊",
+      "start": "2026-10-21",
+      "end": "2026-10-26",
+      "status": "pending",
+      "sourceClause": "第四章 4.4"
+    },
+    {
+      "id": "BI-05",
+      "title": "4.5 技术要求响应项5",
+      "category": "技术",
+      "owner": "王强",
+      "start": "2026-10-21",
+      "end": "2026-10-26",
+      "status": "pending",
+      "sourceClause": "第四章 4.5"
+    },
+    {
+      "id": "BI-06",
+      "title": "4.6 技术要求响应项6",
+      "category": "技术",
+      "owner": "陈磊",
+      "start": "2026-10-21",
+      "end": "2026-10-26",
+      "status": "in_progress",
+      "sourceClause": "第四章 4.6"
+    },
+    {
+      "id": "BI-07",
+      "title": "4.7 技术要求响应项7",
+      "category": "技术",
+      "owner": "王强",
+      "start": "2026-10-21",
+      "end": "2026-10-26",
+      "status": "pending",
+      "sourceClause": "第四章 4.7"
+    },
+    {
+      "id": "BI-08",
+      "title": "4.8 技术要求响应项8",
+      "category": "技术",
+      "owner": "陈磊",
+      "start": "2026-10-21",
+      "end": "2026-10-26",
+      "status": "pending",
+      "sourceClause": "第四章 4.8"
+    },
+    {
+      "id": "BI-09",
+      "title": "4.9 技术要求响应项9",
+      "category": "技术",
+      "owner": "王强",
+      "start": "2026-10-21",
+      "end": "2026-10-26",
+      "status": "in_progress",
+      "sourceClause": "第四章 4.9"
+    },
+    {
+      "id": "BI-10",
+      "title": "4.10 技术要求响应项10",
+      "category": "技术",
+      "owner": "陈磊",
+      "start": "2026-10-21",
+      "end": "2026-10-26",
+      "status": "pending",
+      "sourceClause": "第四章 4.10"
+    },
+    {
+      "id": "BI-11",
+      "title": "4.11 技术要求响应项11",
+      "category": "技术",
+      "owner": "王强",
+      "start": "2026-10-21",
+      "end": "2026-10-26",
+      "status": "pending",
+      "sourceClause": "第四章 4.11"
+    },
+    {
+      "id": "BI-12",
+      "title": "4.12 技术要求响应项12",
+      "category": "技术",
+      "owner": "陈磊",
+      "start": "2026-10-21",
+      "end": "2026-10-26",
+      "status": "in_progress",
+      "sourceClause": "第四章 4.12"
+    },
+    {
+      "id": "BI-13",
+      "title": "交付周期与里程碑承诺",
+      "category": "交付",
+      "owner": "张伟",
+      "start": "2026-10-20",
+      "end": "2026-10-24",
+      "status": "completed",
+      "sourceClause": "第五章 交付"
+    },
+    {
+      "id": "BI-14",
+      "title": "物流与关务方案",
+      "category": "交付",
+      "owner": "张伟",
+      "start": "2026-10-24",
+      "end": "2026-10-28",
+      "status": "in_progress",
+      "sourceClause": "第五章 交付"
+    },
+    {
+      "id": "BI-15",
+      "title": "交付保障项1",
+      "category": "交付",
+      "owner": "王芳",
+      "start": "2026-10-22",
+      "end": "2026-10-24",
+      "status": "completed",
+      "sourceClause": "第五章 交付"
+    },
+    {
+      "id": "BI-16",
+      "title": "交付保障项2",
+      "category": "交付",
+      "owner": "张伟",
+      "start": "2026-10-22",
+      "end": "2026-10-27",
+      "status": "pending",
+      "sourceClause": "第五章 交付"
+    },
+    {
+      "id": "BI-17",
+      "title": "交付保障项3",
+      "category": "交付",
+      "owner": "王芳",
+      "start": "2026-10-22",
+      "end": "2026-10-27",
+      "status": "pending",
+      "sourceClause": "第五章 交付"
+    },
+    {
+      "id": "BI-18",
+      "title": "交付保障项4",
+      "category": "交付",
+      "owner": "张伟",
+      "start": "2026-10-22",
+      "end": "2026-10-27",
+      "status": "pending",
+      "sourceClause": "第五章 交付"
+    },
+    {
+      "id": "BI-19",
+      "title": "商务偏差表（Scope/付款/质保）",
+      "category": "商务",
+      "owner": "王芳",
+      "start": "2026-10-21",
+      "end": "2026-10-25",
+      "status": "in_progress",
+      "sourceClause": "第五章 商务"
+    },
+    {
+      "id": "BI-20",
+      "title": "付款节点与合同审查确认",
+      "category": "商务",
+      "owner": null,
+      "start": "2026-10-22",
+      "end": "2026-10-26",
+      "status": "blocked",
+      "sourceClause": "第五章 商务"
+    },
+    {
+      "id": "BI-21",
+      "title": "商务条款响应项1",
+      "category": "商务",
+      "owner": "王芳",
+      "start": "2026-10-22",
+      "end": "2026-10-27",
+      "status": "pending",
+      "sourceClause": "第五章 商务"
+    },
+    {
+      "id": "BI-22",
+      "title": "商务条款响应项2",
+      "category": "商务",
+      "owner": "李明",
+      "start": "2026-10-22",
+      "end": "2026-10-27",
+      "status": "in_progress",
+      "sourceClause": "第五章 商务"
+    },
+    {
+      "id": "BI-23",
+      "title": "商务条款响应项3",
+      "category": "商务",
+      "owner": "王芳",
+      "start": "2026-10-22",
+      "end": "2026-10-27",
+      "status": "pending",
+      "sourceClause": "第五章 商务"
+    },
+    {
+      "id": "BI-24",
+      "title": "商务条款响应项4",
+      "category": "商务",
+      "owner": "李明",
+      "start": "2026-10-22",
+      "end": "2026-10-27",
+      "status": "in_progress",
+      "sourceClause": "第五章 商务"
+    },
+    {
+      "id": "BI-25",
+      "title": "商务条款响应项5",
+      "category": "商务",
+      "owner": "王芳",
+      "start": "2026-10-22",
+      "end": "2026-10-27",
+      "status": "pending",
+      "sourceClause": "第五章 商务"
+    },
+    {
+      "id": "BI-26",
+      "title": "商务条款响应项6",
+      "category": "商务",
+      "owner": null,
+      "start": "2026-10-22",
+      "end": "2026-10-27",
+      "status": "blocked",
+      "sourceClause": "第五章 商务"
+    },
+    {
+      "id": "BI-27",
+      "title": "资质与格式响应项1",
+      "category": "资质与格式",
+      "owner": "王芳",
+      "start": "2026-10-20",
+      "end": "2026-10-24",
+      "status": "completed",
+      "sourceClause": "第六章/第二章"
+    },
+    {
+      "id": "BI-28",
+      "title": "资质与格式响应项2",
+      "category": "资质与格式",
+      "owner": null,
+      "start": "2026-10-20",
+      "end": "2026-10-27",
+      "status": "blocked",
+      "sourceClause": "第六章/第二章"
+    },
+    {
+      "id": "BI-29",
+      "title": "资质与格式响应项3",
+      "category": "资质与格式",
+      "owner": "王芳",
+      "start": "2026-10-20",
+      "end": "2026-10-24",
+      "status": "completed",
+      "sourceClause": "第六章/第二章"
+    },
+    {
+      "id": "BI-30",
+      "title": "资质与格式响应项4",
+      "category": "资质与格式",
+      "owner": "张伟",
+      "start": "2026-10-20",
+      "end": "2026-10-24",
+      "status": "completed",
+      "sourceClause": "第六章/第二章"
+    },
+    {
+      "id": "BI-31",
+      "title": "资质与格式响应项5",
+      "category": "资质与格式",
+      "owner": null,
+      "start": "2026-10-20",
+      "end": "2026-10-27",
+      "status": "blocked",
+      "sourceClause": "第六章/第二章"
+    },
+    {
+      "id": "BI-32",
+      "title": "资质与格式响应项6",
+      "category": "资质与格式",
+      "owner": "张伟",
+      "start": "2026-10-20",
+      "end": "2026-10-27",
+      "status": "pending",
+      "sourceClause": "第六章/第二章"
+    },
+    {
+      "id": "BI-33",
+      "title": "资质与格式响应项7",
+      "category": "资质与格式",
+      "owner": null,
+      "start": "2026-10-20",
+      "end": "2026-10-27",
+      "status": "blocked",
+      "sourceClause": "第六章/第二章"
+    },
+    {
+      "id": "BI-34",
+      "title": "资质与格式响应项8",
+      "category": "资质与格式",
+      "owner": "张伟",
+      "start": "2026-10-20",
+      "end": "2026-10-24",
+      "status": "completed",
+      "sourceClause": "第六章/第二章"
+    }
+  ],
+  "countsNote": "计数一律由条目算出：total=34；unassigned=owner为空的条目数；completed=状态completed的条目数；原型他处40/26/32等冲突数字不采用。"
+}

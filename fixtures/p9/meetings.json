@@ -1,0 +1,73 @@
+{
+  "bidId": "BID-20261010-003",
+  "meetings": [
+    {
+      "id": "MT-01",
+      "name": "开工会·分工晾晒",
+      "type": "开工会",
+      "time": "2026-10-22 14:00",
+      "participants": 6,
+      "initiator": "王强",
+      "recording": "未录音",
+      "status": "待开"
+    },
+    {
+      "id": "MT-02",
+      "name": "客户澄清会（第一轮）",
+      "type": "客户会",
+      "time": "2026-10-25 10:00-11:20",
+      "participants": 3,
+      "initiator": "李明",
+      "recording": "已转写",
+      "todos": 3,
+      "conclusions": 3,
+      "status": "待纪要",
+      "minutesNote": "议题：BESS台数优化、质保年限延长、远程调试支持；决议：维持20台报价，质保出5年/10年两版，远程调试写入技术标加分项，剩余1项由陈磊10-26前书面答复。"
+    },
+    {
+      "id": "MT-03",
+      "name": "投标策略评审",
+      "type": "评审会",
+      "time": "2026-10-12 16:00",
+      "participants": 4,
+      "initiator": "李明",
+      "recording": "已转写",
+      "todos": 2,
+      "status": "已出纪要"
+    },
+    {
+      "id": "MT-04",
+      "name": "标书分解对齐会",
+      "type": "内部会",
+      "time": "2026-10-20 14:00",
+      "participants": 4,
+      "initiator": "王强",
+      "recording": "已转写",
+      "todos": 1,
+      "status": "已出纪要"
+    },
+    {
+      "id": "MT-05",
+      "name": "招标文件答疑会",
+      "type": "客户会",
+      "time": "2026-10-16 09:30",
+      "participants": 8,
+      "initiator": "李明",
+      "recording": "已转写",
+      "todos": 1,
+      "conclusions": 2,
+      "status": "已出纪要"
+    },
+    {
+      "id": "MT-06",
+      "name": "投标文件定稿评审",
+      "type": "评审会",
+      "time": "2026-10-30 15:00",
+      "participants": 5,
+      "initiator": "王强",
+      "recording": "未录音",
+      "status": "待开"
+    }
+  ],
+  "countsNote": "6场：已出纪要3，待纪要1，待开2。"
+}

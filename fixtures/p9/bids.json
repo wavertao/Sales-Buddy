@@ -1,0 +1,136 @@
+{
+  "demoClock": "2026-10-24",
+  "list": {
+    "note": "P9.0.1显示6/8：另有2个已归档（流标/放弃）不在本文件行内，统计口径见stats。",
+    "rows": [
+      {
+        "id": "BID-20261010-003",
+        "name": "宁德时代·储能项目",
+        "round": "首轮（列表口径；详情屏为R2，见口径说明）",
+        "node": "标书分解",
+        "owner": "王强",
+        "team": "储能SPP",
+        "deadline": "2026-11-05",
+        "remainingDays": 12,
+        "initiator": "李明",
+        "initiated": "2026-10-10",
+        "status": "进行中"
+      },
+      {
+        "id": "BID-20261008-002",
+        "name": "比亚迪·储能柜二期",
+        "round": "首轮",
+        "node": "投标文件制作",
+        "owner": "张伟",
+        "team": "储能SPP",
+        "deadline": "2026-11-08",
+        "remainingDays": 15,
+        "initiator": "张伟",
+        "initiated": "2026-10-08",
+        "status": "进行中"
+      },
+      {
+        "id": "BID-20260928-007",
+        "name": "隆基绿能·分布式储能",
+        "round": "第二轮",
+        "node": "BAFO",
+        "owner": "陈磊",
+        "team": "光伏SPP",
+        "deadline": "2026-10-28",
+        "remainingDays": 4,
+        "initiator": "王芳",
+        "initiated": "2026-09-28",
+        "status": "风险"
+      },
+      {
+        "id": "BID-20260922-005",
+        "name": "阳光电源·电站储能",
+        "round": "首轮",
+        "node": "交标",
+        "owner": "王芳",
+        "team": "储能SPP",
+        "deadline": "2026-10-30",
+        "remainingDays": 6,
+        "initiator": "王强",
+        "initiated": "2026-09-22",
+        "status": "进行中"
+      },
+      {
+        "id": "BID-20261014-004",
+        "name": "天合光能·储能一体机",
+        "round": "首轮",
+        "node": "投标策略制定",
+        "owner": "李明",
+        "team": "汽车SPP",
+        "deadline": "2026-11-15",
+        "remainingDays": 22,
+        "initiator": "李明",
+        "initiated": "2026-10-14",
+        "status": "进行中"
+      },
+      {
+        "id": "BID-20251205-011",
+        "name": "浙江工商业储能·工商业储能集群",
+        "round": "首轮",
+        "node": "定标",
+        "owner": "王强",
+        "team": "储能SPP",
+        "deadline": "2026-10-12",
+        "remainingDays": null,
+        "initiator": "王强",
+        "initiated": "2025-12-05",
+        "status": "已逾期"
+      }
+    ]
+  },
+  "sameOpportunity": [
+    {
+      "id": "BID-20261010-003",
+      "name": "储能项目",
+      "round": "R1已交标/R2当前",
+      "node": "标书分解",
+      "deadline": "11-05",
+      "remainingDays": 12,
+      "owner": "王强",
+      "team": "储能SPP",
+      "initiator": "李明",
+      "initiated": "2026-10-10",
+      "status": "进行中"
+    },
+    {
+      "id": "BID-20260912-011",
+      "name": "储能项目·二期",
+      "round": "R1当前",
+      "node": "交标",
+      "deadline": "10-30",
+      "remainingDays": 6,
+      "owner": "王芳",
+      "team": "储能SPP",
+      "initiator": "王芳",
+      "initiated": "2026-09-12",
+      "status": "进行中"
+    },
+    {
+      "id": "BID-20260820-004",
+      "name": "储能项目·增补",
+      "round": "R1·R2已交标/R3当前",
+      "node": "BAFO",
+      "deadline": "10-28",
+      "remainingDays": 4,
+      "owner": "陈磊",
+      "team": "储能SPP",
+      "initiator": "陈磊",
+      "initiated": "2026-08-20",
+      "status": "风险"
+    }
+  ],
+  "stats": {
+    "在跟": 8,
+    "待我处理": 3,
+    "进行中": 5,
+    "本周交标": 2,
+    "卡点": "3（未派责任人2·排期冲突1）",
+    "中标率": "42%（近12个月19投8中）"
+  },
+  "roundNote": "主标列表行轮次写“首轮”，详情屏统一为R2，P9.0.2称R1已交标/R2当前——三处口径差异属原型内冲突（U-13），本种子原样保留差异并标注，不擅自统一。"
+}
