@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, CircleCheck, Download, FileText, FileUp, Fol
 import * as D from '../demo';
 import { useP9 } from '../store';
 import { Btn, Check, Pill, cx } from '../ui';
+import { LiveDocs } from './docs-live';
 
 const DOC_TONE = { 进行中: 'blue', 待开始: 'gray', 阻塞: 'red', 已完成: 'green' } as const;
 
@@ -70,7 +71,13 @@ function exportRows(bidNo: string) {
   a.download = bidNo + '-拆标分解表.csv'; a.click(); URL.revokeObjectURL(a.href);
 }
 
+/** 后端接通时走真实解析（docs-live），否则保留设计稿演示数据。 */
 export function Docs() {
+  const { online } = useP9();
+  return online ? <LiveDocs /> : <DemoDocs />;
+}
+
+function DemoDocs() {
   const { docsState, setDocsState, notify, call, bid, setTab } = useP9();
   const [fileName, setFileName] = useState('XX储能项目招标文件_终版.pdf');
   const [openCh, setOpenCh] = useState('第四章 技术要求');

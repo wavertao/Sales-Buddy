@@ -1,0 +1,188 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ChevronDown, ChevronRight, FileText, GitBranch, ListChecks, RotateCcw, Search } from "lucide-react";
+import type { DecompItem, FieldSummary, FileRole, Severity, Strength, TenderCategory, TenderParseResult } from "../../../../packages/contracts/tender";
+import { TENDER_CATEGORIES } from "../../../../packages/contracts/tender";
+import "./tender.css";
+
+/** 标书解析结果的展示件：投标「招标文件」Tab 与规则试跑共用。 */
+export const CAT_LABEL = Object.fromEntries(TENDER_CATEGORIES.map((c) => [c.key, c.label])) as Record<TenderCategory, string>;
+export const ROLE_LABEL: Record<FileRole, string> = {
+  notice: '招标公告', itb: '招标正文', contract: '合同 / 协议', technical_spec: '技术规范', amendment: '修订 / 补遗',
+  clarification: '澄清 / 答疑', boq: '报价清单', drawing: '图纸', form: '格式表单', integrity: '廉洁协议', result: '中标结果', reference: '参考资料', other: '其他',
+};
+export const STRENGTH_LABEL: Record<Strength, string> = { mandatory: '强制', prohibited: '禁止 / 否决', recommended: '建议' };
+export const SEV_LABEL: Record<Severity, string> = { high: '高', medium: '中', low: '低' };
+export const STATUS_LABEL: Record<string, string> = { ok: '已解析', partial_scanned: '部分无文字层', scanned: '扫描件', unsupported: '不支持', error: '读取失败' };
+export const FIELD_STATUS: Record<FieldSummary['status'], [string, string]> = {
+  single: ['单一来源', 'gray'], consistent: ['多处一致', 'green'], overridden: ['已被修订', 'blue'], conflict: ['待核对', 'orange'],
+};
+export const fmtSize = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+export const Kpi = ({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) => (
+  <div className="tp-kpi"><span>{label}</span><b className={tone ? 'tone-' + tone : ''}>{value}</b></div>
+);
+export const FlowStep = ({ n, label, detail, last }: { n: number; label: string; detail: string; last?: boolean }) => (
+  <>
+    <div className="tp-flow-step"><i>{n}</i><div><b>{label}</b><span>{detail}</span></div></div>
+    {!last && <ChevronRight size={14} className="tp-flow-arrow" />}
+  </>
+);
+
+export function FilesCard({ r }: { r: TenderParseResult }) {
+  const files = [...r.files].sort((a, b) => b.precedence - a.precedence);
+  return (
+    <div className="tp-card">
+      <div className="tp-card-head"><FileText size={14} /><b>文件角色</b><span className="tp-muted">按效力顺序（澄清 &gt; 修订 &gt; 规范 / 合同 &gt; 正文）</span></div>
+      <table className="tp-table">
+        <thead><tr><th>文件</th><th>角色</th><th>页</th><th>章节 / 条款</th><th>状态</th></tr></thead>
+        <tbody>
+          {files.map((f) => (
+            <tr key={f.id}>
+              <td className="tp-file" title={f.path}>{f.name}</td>
+              <td><span className={'tp-role r-' + f.role}>{ROLE_LABEL[f.role]}</span></td>
+              <td className="tp-num">{f.pages || '–'}</td>
+              <td className="tp-num">{f.clauses ? `${f.sections} / ${f.clauses}` : <span className="tp-muted">只登记</span>}</td>
+              <td title={f.note}><span className={'tp-pill ' + (f.status === 'ok' ? 'green' : f.status === 'partial_scanned' ? 'gray' : 'orange')}>{STATUS_LABEL[f.status]}</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function FieldsCard({ fields }: { fields: FieldSummary[] }) {
+  return (
+    <div className="tp-card">
+      <div className="tp-card-head"><GitBranch size={14} /><b>关键字段</b><span className="tp-muted">采用效力最高的文件里的值；多值时列出其余取值</span></div>
+      {!fields.length && <p className="tp-muted tp-pad">没有命中任何字段规则</p>}
+      <table className="tp-table">
+        <tbody>
+          {fields.map((f) => {
+            const [label, tone] = FIELD_STATUS[f.status];
+            const others = f.values.filter((v) => v.value !== f.value).slice(0, 4);
+            return (
+              <tr key={f.key}>
+                <td className="tp-field-label">{f.label}</td>
+                <td><b>{f.value}</b><div className="tp-muted tp-small" title={f.source}>{f.source}</div></td>
+                <td><span className={'tp-pill ' + tone}>{label}</span></td>
+                <td className="tp-small tp-muted">{others.map((v) => v.normalized).join(' · ')}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function OverridesCard({ r }: { r: TenderParseResult }) {
+  const [open, setOpen] = useState(false);
+  const shown = open ? r.overrides : r.overrides.slice(0, 6);
+  return (
+    <div className="tp-card">
+      <div className="tp-card-head"><RotateCcw size={14} /><b>修订 / 澄清引用</b><span className="tp-muted">修订文件里提到的条款号，能定位到原文的会在分解表里标「已修订」</span></div>
+      <div className="tp-overrides">
+        {shown.map((o, i) => (
+          <div key={i} className="tp-override">
+            <span className={'tp-role r-' + o.role}>{ROLE_LABEL[o.role]}</span>
+            <b>{o.ref}</b>
+            <span className="tp-muted tp-small">{o.fileName} · 第 {o.page} 页</span>
+            {o.target ? <span className="tp-pill blue">→ {o.target.fileName} · {o.target.section.slice(0, 36)}</span> : <span className="tp-pill gray">未定位到原条款</span>}
+            <div className="tp-snippet">{o.snippet}</div>
+          </div>
+        ))}
+      </div>
+      {r.overrides.length > 6 && <button className="tp-link" onClick={() => setOpen(!open)}>{open ? '收起' : `展开全部 ${r.overrides.length} 处`}<ChevronDown size={12} className={open ? 'rot' : ''} /></button>}
+    </div>
+  );
+}
+
+export function DecompCard({ r }: { r: TenderParseResult }) {
+  const [cat, setCat] = useState<TenderCategory | 'all'>('all');
+  const [only, setOnly] = useState<'all' | 'strong' | 'risk' | 'amended'>('all');
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(0);
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => { setPage(0); }, [cat, only, q, r.id]);
+  const rows = useMemo(() => r.items.filter((it) =>
+    (cat === 'all' || it.category === cat)
+    && (only === 'all' || (only === 'strong' && (it.strength === 'mandatory' || it.strength === 'prohibited')) || (only === 'risk' && it.risks.length > 0) || (only === 'amended' && it.amended))
+    && (!q || (it.text + it.fileName + it.section).toLowerCase().includes(q.toLowerCase()))), [r, cat, only, q]);
+  const PAGE = 40;
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
+  const shown = rows.slice(page * PAGE, page * PAGE + PAGE);
+  return (
+    <div className="tp-card">
+      <div className="tp-card-head"><ListChecks size={14} /><b>拆标分解表</b><span className="tp-muted">{r.items.length} 条{r.truncated ? '（已截断）' : ''} · 负责 / 复核按「责任分工」规则，截止按投标截止倒排</span></div>
+      <div className="tp-filters">
+        <div className="tp-seg">
+          <button className={cat === 'all' ? 'on' : ''} onClick={() => setCat('all')}>全部 {r.items.length}</button>
+          {TENDER_CATEGORIES.map((c) => <button key={c.key} className={cat === c.key ? 'on' : ''} onClick={() => setCat(c.key)}><i className={'tp-dot c-' + c.key} />{c.label} {r.stats.byCategory[c.key]}</button>)}
+        </div>
+        <select value={only} onChange={(e) => setOnly(e.target.value as typeof only)}>
+          <option value="all">全部要求</option><option value="strong">只看强制 / 否决</option><option value="risk">只看有风险</option><option value="amended">只看被修订章节</option>
+        </select>
+        <label className="tp-search"><Search size={13} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜条款原文、文件、章节" /></label>
+      </div>
+      <table className="tp-table tp-decomp">
+        <thead><tr><th>编号</th><th>类别</th><th>要求</th><th>强度</th><th>风险</th><th>出处</th><th>负责 / 复核</th><th>截止</th></tr></thead>
+        <tbody>
+          {shown.map((it) => <DecompRow key={it.id} it={it} open={open === it.id} toggle={() => setOpen(open === it.id ? null : it.id)} />)}
+          {!shown.length && <tr><td colSpan={8} className="tp-muted tp-pad">没有符合条件的要求</td></tr>}
+        </tbody>
+      </table>
+      <div className="tp-pager">
+        <span className="tp-muted">共 {rows.length} 条</span>
+        <button className="tp-btn" disabled={page === 0} onClick={() => setPage(page - 1)}>上一页</button>
+        <span>{page + 1} / {pages}</span>
+        <button className="tp-btn" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>下一页</button>
+      </div>
+    </div>
+  );
+}
+
+export function DecompRow({ it, open, toggle }: { it: DecompItem; open: boolean; toggle: () => void }) {
+  const top = it.risks.reduce<Severity | null>((m, x) => (!m || (x.severity === 'high') || (x.severity === 'medium' && m === 'low') ? x.severity : m), null);
+  return (
+    <>
+      <tr className={'tp-row' + (open ? ' open' : '')} onClick={toggle}>
+        <td className="tp-num tp-muted">{it.id}</td>
+        <td><span className={'tp-cat c-' + it.category}>{CAT_LABEL[it.category]}</span></td>
+        <td className="tp-req">
+          {it.amended && <span className="tp-pill blue">已修订</span>}
+          {it.fileRole === 'clarification' && <span className="tp-pill purple">澄清</span>}
+          {it.title}
+        </td>
+        <td>{it.strength ? <span className={'tp-pill ' + (it.strength === 'prohibited' ? 'red' : it.strength === 'mandatory' ? 'dark' : 'gray')}>{STRENGTH_LABEL[it.strength]}</span> : <span className="tp-muted">–</span>}</td>
+        <td>{top ? <span className={'tp-pill sev-' + top}>{SEV_LABEL[top]} · {it.risks.length}</span> : <span className="tp-muted">–</span>}</td>
+        <td className="tp-src" title={`${it.fileName} · ${it.section}`}>{it.fileName}<span>第 {it.page} 页 · {it.section}</span></td>
+        <td className="tp-owner">{it.owner}<span>{it.reviewer}</span></td>
+        <td className="tp-num">{it.dueDate?.slice(5) || <span className="tp-muted">–</span>}</td>
+      </tr>
+      {open && (
+        <tr className="tp-detail"><td /><td colSpan={7}>
+          <p>{it.text}</p>
+          {it.risks.map((x) => <div key={x.label} className={'tp-risk sev-' + x.severity}><AlertTriangle size={12} /><b>{x.label}</b>{x.advice}</div>)}
+          <div className="tp-muted tp-small">分类得分 {it.score} · 来源文件角色：{ROLE_LABEL[it.fileRole]}</div>
+        </td></tr>
+      )}
+    </>
+  );
+}
+
+export function exportCsv(r: TenderParseResult) {
+  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['编号', '类别', '要求', '原文', '强度', '风险', '处理建议', '文件', '文件角色', '章节', '页', '负责', '复核', '截止', '已修订'];
+  const lines = r.items.map((it) => [
+    it.id, CAT_LABEL[it.category], it.title, it.text, it.strength ? STRENGTH_LABEL[it.strength] : '',
+    it.risks.map((x) => `${SEV_LABEL[x.severity]}·${x.label}`).join('；'), it.risks.map((x) => x.advice).join('；'),
+    it.fileName, ROLE_LABEL[it.fileRole], it.section, it.page, it.owner, it.reviewer, it.dueDate || '', it.amended ? '是' : '',
+  ].map(esc).join(','));
+  const blob = new Blob(['﻿' + [head.map(esc).join(','), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `拆标分解表_${r.packageName}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}

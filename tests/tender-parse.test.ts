@@ -92,3 +92,27 @@ test('TENDER-04 规则保存：版本号、乐观锁、坏正则拦截、恢复�
   assert.ok(v4.risks.some((x) => x.id === 'r-x'));
   assert.equal(v4.version, v3.version + 1);
 });
+
+test('TENDER-05 投标内解析：按「类别 + 文件」合并成分解条目写回投标，重传只更新不重复', async () => {
+  const { seed } = await import('../apps/server/src/seed.ts');
+  const { seedP9 } = await import('../apps/server/src/p9/seed-p9.ts');
+  const C = await import('../apps/server/src/crm.ts');
+  const S = await import('../apps/server/src/p9/service.ts');
+  seed(); seedP9();
+  const admin = C.user('U-ADMIN');
+  const bid = S.listBids(admin, {}).records[0];
+  assert.ok(bid, '种子里应有投标');
+  assert.equal(S.tenderForBid(admin, bid.id).result, null);
+  const files = [txt('招标文件正文.txt', RFP), txt('Amendment-01.txt', AMD)];
+  const first = await S.parseTenderForBid(admin, bid.id, { upload: { name: '测试包', files } });
+  const groups = new Set(first.result.items.map((i) => `${i.category}|${i.fileName}`));
+  assert.equal(first.items.length, groups.size);
+  const all = first.items.reduce((n, x) => n + Number(x.requirementCount), 0);
+  assert.equal(all, first.result.items.length, '每条要求恰好落在一个条目里');
+  assert.ok(first.items.every((x) => x.node === 3 && x.status === 'pending' && x.assigneeRole));
+  const again = await S.parseTenderForBid(admin, bid.id, { upload: { name: '测试包', files } });
+  const now = S.tenderForBid(admin, bid.id);
+  assert.equal(now.items.length, groups.size, '重传不重复生成条目');
+  assert.equal(now.result?.id, again.result.id);
+  assert.equal(now.doc?.version, 'v2');
+});

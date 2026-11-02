@@ -9,6 +9,10 @@ import { tryAdvance } from './state-machine.ts';
 import { allocateBidNumber, canViewQuote, childById, children, collections, loadBid, loadChild, newId, requireQuoteAccess, saveBid, saveChild, stamp } from './store.ts';
 import { allowedRecord, canAccess } from '../crm.ts';
 import { allRecords, record } from '../db.ts';
+import { TENDER_CATEGORIES } from '../../../../packages/contracts/tender.ts';
+import type { DecompItem, TenderCategory } from '../../../../packages/contracts/tender.ts';
+import { getRun, parseSample, parseUpload } from '../tender/service.ts';
+import type { SourceFile } from '../tender/extract.ts';
 
 /** 业务时钟日期（db.now() 的日期部分，仓库约定；绝不硬编码 2026-10-24，演示时钟由 BUSINESS_CLOCK 控制）。 */
 export const todayStr = () => dateOnly(stamp());
@@ -676,4 +680,65 @@ export function aiCheck(user: User, id: string) {
     }
   }
   return { pipeline: bid.aiPipeline, report, gapTasks, allTasksDone: allDone(c.tasks) };
+}
+
+// ---- 招标文件解析（接标书解析流水线） -----------------------------------------
+/**
+ * 在投标下解析招标整包：跑 tender 流水线 → 记一份 bid_doc（带 tenderRunId）→ 把要求按「类别 + 文件」
+ * 合并成拆标分解条目写回 bid_item（node 3 标书分解），计划 / 待办沿用原有逻辑往下走。
+ * 同一类别同一文件的条目按 tenderKey 覆盖更新（仅限未开始的），重传新版不会重复生成。
+ */
+const TENDER_CAT_LABEL: Record<TenderCategory, string> = Object.fromEntries(TENDER_CATEGORIES.map((c) => [c.key, c.label])) as Record<TenderCategory, string>;
+export async function parseTenderForBid(user: User, bidId: string, input: { sample?: string; upload?: { name: string; files: SourceFile[] } }) {
+  const bid = loadBid(user, bidId);
+  const result = input.sample ? await parseSample(user.name, input.sample) : await parseUpload(user.name, input.upload?.name || '', input.upload?.files || []);
+  const doc: BidDoc = {
+    ...childBase(bid, newId('DOC'), 'bid_doc', result.packageName), filename: result.packageName,
+    category: '招标文件原件', version: 'v' + (children<BidDoc>(bid.id, 'bid_doc').filter((d) => d.tenderRunId).length + 1),
+    size: `${result.stats.files} 个文件 · ${result.stats.pages} 页`, uploader: user.id, status: 'parsed',
+    chapters: [], parseStatus: 'parsed', parseError: null, tenderRunId: result.id,
+  };
+  saveChild(doc);
+  const groups = new Map<string, DecompItem[]>();
+  for (const it of result.items) {
+    const k = `${it.category}|${it.fileName}`;
+    groups.set(k, [...(groups.get(k) || []), it]);
+  }
+  const existing = new Map(children<BidItem>(bid.id, 'bid_item').filter((x) => x.tenderKey).map((x) => [String(x.tenderKey), x]));
+  const today = todayStr();
+  const fallbackEnd = dateOnly(bid.deadlineAt);
+  const out: BidItem[] = [];
+  for (const [key, its] of groups) {
+    const first = its[0];
+    const mandatory = its.filter((i) => i.strength).length;
+    const risky = its.filter((i) => i.risks.length).length;
+    const dues = its.map((i) => i.dueDate).filter(Boolean).sort() as string[];
+    const fields = {
+      title: `${TENDER_CAT_LABEL[first.category]} · ${first.fileName.replace(/\.[^.]+$/, '')}`,
+      category: TENDER_CAT_LABEL[first.category],
+      sourceClause: `${first.fileName} · ${its.length} 条要求${mandatory ? ` · 强制 ${mandatory}` : ''}${risky ? ` · 风险 ${risky}` : ''}`,
+      assigneeRole: first.owner, reviewerRole: first.reviewer, end: dues[0] || fallbackEnd,
+      tenderKey: key, tenderRunId: result.id, requirementIds: its.map((i) => i.id),
+      requirementCount: its.length, mandatoryCount: mandatory, riskCount: risky, amended: its.some((i) => i.amended),
+    };
+    const prev = existing.get(key);
+    if (prev && prev.status !== 'pending') continue;
+    const rec: BidItem = prev
+      ? { ...prev, ...fields, updatedAt: stamp() }
+      : { ...childBase(bid, newId('BI'), 'bid_item', fields.title), ...fields, node: 3 as BidItem['node'], assigneeId: null, start: today, status: 'pending', deliverable: '', dependsOn: [] };
+    out.push(saveChild(rec));
+  }
+  let next = loadBid(user, bidId);
+  if (['idle', 'planning', 'plan_draft', 'decomposing'].includes(next.aiPipeline)) next = saveBid({ ...next, aiPipeline: 'decomposing', aiLastError: null });
+  return { doc, result, items: out, pipeline: next.aiPipeline };
+}
+/** 投标最近一次招标文件解析：文档 + 解析结果 + 由它生成的分解条目；没有则 result 为 null。 */
+export function tenderForBid(user: User, bidId: string) {
+  loadBid(user, bidId);
+  // 业务时钟可能固定，createdAt 会相同，按版本号取最新
+  const ver = (d: BidDoc) => Number(String(d.version).replace(/\D/g, '')) || 0;
+  const doc = children<BidDoc>(bidId, 'bid_doc').filter((d) => d.tenderRunId).sort((a, b) => ver(b) - ver(a))[0];
+  if (!doc) return { doc: null, result: null, items: [] };
+  const items = children<BidItem>(bidId, 'bid_item').filter((x) => x.tenderKey);
+  return { doc, result: getRun(String(doc.tenderRunId)), items };
 }
