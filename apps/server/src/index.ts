@@ -3,6 +3,7 @@ import {portraitList,getPortrait,readPortrait,changePortrait,portraitVersions} f
 import {webSearch,publicSearchConfig,saveSearchConfig,searchConfigured} from './web-search.ts';
 import {meetingRoutes} from './meeting-routes.ts';
 import {p9Routes} from './p9/routes.ts';
+import {tenderRoutes} from './tender/routes.ts';
 import {seedP9} from './p9/seed-p9.ts';
 import {initMaterialLibrary} from './materials.ts';
 import {restartMeetingJobs} from './meetings.ts';
@@ -48,6 +49,7 @@ app.post('/mcp',async(req,res)=>{
 app.get('/mcp',(_,res)=>res.status(405).json({error:'Use MCP POST transport'}));
 app.use('/api',meetingRoutes);
 app.use('/api',p9Routes);
+app.use('/api',tenderRoutes);
 app.get('/api/session',(_,res)=>res.json({user:res.locals.user,mode:'live',model:modelStatus()}));
 app.post('/api/mode',(req,res)=>{userMode(req.body.mode);res.json({mode:'live'});});
 app.get('/api/objects/search',(req,res)=>{
