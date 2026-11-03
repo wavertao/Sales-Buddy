@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, CircleCheck, Download, FileUp, FolderInput, 
 import type { DecompItem, TenderParseResult } from '../../../../../packages/contracts/tender';
 import { TENDER_CATEGORIES } from '../../../../../packages/contracts/tender';
 import { CAT_LABEL, DecompCard, DecompRow, FieldsCard, FilesCard, Kpi, OverridesCard, exportCsv, fmtSize } from '../../tender/TenderResult';
+import { mapPlan } from '../live';
 import { useP9 } from '../store';
 import { Btn, Pill, cx } from '../ui';
 
@@ -126,7 +127,7 @@ function WorkItems({ items, result }: { items: WorkItem[]; result: TenderParseRe
 }
 
 export function LiveDocs() {
-  const { api, bid, notify, setTab } = useP9();
+  const { api, bid, notify, setTab, setPlan, today } = useP9();
   const [data, setData] = useState<Bundle | null>(null);
   const [busy, setBusy] = useState('');
   const [view, setView] = useState<'items' | 'reqs'>('items');
@@ -137,6 +138,7 @@ export function LiveDocs() {
 
   const done = (j: { result: TenderParseResult; items: WorkItem[] }) => {
     notify(`解析完成：${j.result.stats.items} 条要求，生成 / 更新 ${j.items.length} 个拆标分解条目`);
+    void api(base + '/plan').then((p: { items?: Record<string, unknown>[] }) => { if (p?.items?.length) setPlan(mapPlan(p.items, today)); }).catch(() => undefined);
     return api(base + '/tender').then(setData);
   };
   async function parseSample(s: Sample) {

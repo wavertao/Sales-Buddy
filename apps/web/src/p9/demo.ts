@@ -150,7 +150,7 @@ export const STAGES: StageRow[] = [
   { name: '⑥ 投标文件制作', round: 'R2', owner: 'SC / AMD', part: 'AMD 王芳', status: '未开始', start: 30, len: 8 },
   { name: '⑦ 交标', round: 'R2', owner: 'SLS 李明', part: '—', status: '未开始', start: 38, len: 2 },
 ];
-export interface PlanItem { id: string; title: string; round: string; owner: string; part: string; status: PlanStatus; start: string; end: string; cat: '技术' | '交付' | '商务' }
+export interface PlanItem { id: string; title: string; round: string; owner: string; part: string; status: PlanStatus; start: string; end: string; cat: '技术' | '交付' | '商务' | '价格' | '偏差' }
 export const PLAN_START = '2026-10-17';
 export const PLAN_ITEMS: PlanItem[] = [
   { id: 'p1', title: '4.1 技术规格书', round: 'R2', owner: '王强', part: '陈磊、张伟', status: '进行中', start: '2026-10-20', end: '2026-10-23', cat: '技术' },

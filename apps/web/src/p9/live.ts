@@ -1,6 +1,6 @@
 // P9 读侧接线：后端 /api/bids* → 页面视图模型。接口不通或字段缺失时，调用方继续用 demo.ts 的设计稿数据。
 // 只映射后端真实拥有的字段（列表、待办、澄清、会议、文件、健康度），AI 文案与样例对话不从这里来。
-import type { BidRow, Clar, Comment, FileRow, Meeting, Status, Todo } from './demo';
+import type { BidRow, Clar, Comment, FileRow, Meeting, PlanItem, Status, Todo } from './demo';
 import { NODES } from './demo';
 
 type Json = Record<string, any>;
@@ -78,6 +78,20 @@ export function mapFiles(rows: Json[]): FileRow[] {
   });
 }
 
+/** 后端拆标分解条目（bid_item）→ 计划甘特行；招标文件解析生成的条目带类别与复核角色。 */
+export function mapPlan(rows: Json[], today: string | null): PlanItem[] {
+  const st: Record<string, PlanItem['status']> = { pending: '未开始', in_progress: '进行中', doing: '进行中', done: '已完成' };
+  const cats = ['技术', '交付', '价格', '商务', '偏差'];
+  return rows.map((it) => {
+    const end = day(it.end), status = st[it.status] || '未开始';
+    return {
+      id: it.id, title: it.title, round: it.round || '', owner: it.assigneeRole || '', part: it.reviewerRole || '',
+      status: status !== '已完成' && today && end && end < today ? '已逾期' : status,
+      start: day(it.start), end, cat: (cats.includes(it.category) ? it.category : '技术') as PlanItem['cat'],
+    };
+  });
+}
+
 export interface LiveBundle {
   today: string | null;
   node: number;
@@ -87,6 +101,7 @@ export interface LiveBundle {
   clars: Clar[];
   meetings: Meeting[];
   files: FileRow[];
+  plan: PlanItem[];
   quoteVisible: boolean | null;
 }
 
@@ -94,8 +109,8 @@ export interface LiveBundle {
 export async function loadBundle(api: Api, bidId: string, userId?: string): Promise<LiveBundle | null> {
   const get = (p: string) => api(p).catch(() => null);
   const base = '/bids/' + encodeURIComponent(bidId);
-  const [detail, todos, clars, meetings, files, quote] = await Promise.all([
-    get(base), get(base + '/todos'), get(base + '/clarifications'), get(base + '/meetings'), get(base + '/files'), get(base + '/quote-visibility'),
+  const [detail, todos, clars, meetings, files, quote, plan] = await Promise.all([
+    get(base), get(base + '/todos'), get(base + '/clarifications'), get(base + '/meetings'), get(base + '/files'), get(base + '/quote-visibility'), get(base + '/plan'),
   ]);
   if (!detail) return null;
   const today: string | null = detail.today || null;
@@ -111,6 +126,7 @@ export async function loadBundle(api: Api, bidId: string, userId?: string): Prom
     clars: clars ? mapClars(clars, today) : [],
     meetings: meetings ? mapMeetings(meetings) : [],
     files: files ? mapFiles(files) : [],
+    plan: Array.isArray(plan?.items) ? mapPlan(plan.items, today) : [],
     quoteVisible: quote ? !!(quote.visible ?? quote.canView) : null,
   };
 }

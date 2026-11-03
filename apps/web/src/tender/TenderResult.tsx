@@ -10,7 +10,7 @@ export const ROLE_LABEL: Record<FileRole, string> = {
   notice: '招标公告', itb: '招标正文', contract: '合同 / 协议', technical_spec: '技术规范', amendment: '修订 / 补遗',
   clarification: '澄清 / 答疑', boq: '报价清单', drawing: '图纸', form: '格式表单', integrity: '廉洁协议', result: '中标结果', reference: '参考资料', other: '其他',
 };
-export const STRENGTH_LABEL: Record<Strength, string> = { mandatory: '强制', prohibited: '禁止 / 否决', recommended: '建议' };
+export const STRENGTH_LABEL: Record<Strength, string> = { prohibited: '禁止 / 否决', mandatory: '强制', required: '一般要求', recommended: '建议' };
 export const SEV_LABEL: Record<Severity, string> = { high: '高', medium: '中', low: '低' };
 export const STATUS_LABEL: Record<string, string> = { ok: '已解析', partial_scanned: '部分无文字层', scanned: '扫描件', unsupported: '不支持', error: '读取失败' };
 export const FIELD_STATUS: Record<FieldSummary['status'], [string, string]> = {

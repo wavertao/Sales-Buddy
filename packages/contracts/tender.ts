@@ -21,7 +21,7 @@ export type FileRole =
   | 'boq' | 'drawing' | 'form' | 'integrity' | 'result' | 'reference' | 'other';
 
 export type Severity = 'high' | 'medium' | 'low';
-export type Strength = 'mandatory' | 'prohibited' | 'recommended';
+export type Strength = 'prohibited' | 'mandatory' | 'required' | 'recommended';
 export type TeamRole = 'SLS' | 'PM' | 'SC' | 'QA' | 'AMD' | 'BSD';
 
 export interface FileRoleRule {

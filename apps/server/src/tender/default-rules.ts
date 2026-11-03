@@ -68,11 +68,13 @@ export const DEFAULT_RULES: Omit<TenderRuleSet, 'version' | 'updatedAt' | 'updat
   ],
   mandatory: [
     { id: 'm-star', label: '★ / ▲ 实质性条款标记', pattern: '[★▲]', strength: 'mandatory', enabled: true },
-    { id: 'm-cn-must', label: '中文：必须 / 应当 / 须', pattern: '(必须|应当|务必|须(?!知)|应(?:满足|具备|提供|保证|符合|按|在|于))', strength: 'mandatory', enabled: true },
-    { id: 'm-cn-no', label: '中文：不得 / 禁止 / 否则', pattern: '(不得|严禁|禁止|不允许|否则(?:将|视为|按)|视为无效|作废标处理|否决其投标)', strength: 'prohibited', enabled: true },
+    { id: 'm-cn-must', label: '中文强制：必须 / 务必', pattern: '(必须|务必)', strength: 'mandatory', enabled: true },
+    { id: 'm-cn-shall', label: '中文一般要求：应当 / 须 / 应…', pattern: '(应当|须(?!知)|应(?:满足|具备|提供|保证|符合|按|在|于))', strength: 'required', enabled: true },
+    { id: 'm-cn-no', label: '中文否决：不得 / 禁止 / 否则无效', pattern: '(不得|严禁|禁止|不允许|否则(?:将|视为|按)|视为无效|作废标处理|否决其投标|废标)', strength: 'prohibited', enabled: true },
     { id: 'm-threshold', label: '数值门槛：不低于 / 不少于 / not less than', pattern: '(应?不(?:低于|少于|小于|超过|大于|高于)\\s*\\d|至少\\s*\\d|\\b(?:not less than|no less than|not (?:to )?exceed|at least|minimum of)\\s+\\d)', strength: 'mandatory', enabled: true },
-    { id: 'm-en-shall', label: '英文：shall / must / mandatory', pattern: '\\b(shall|must|mandatory|is required to|are required to)\\b(?!\\s+not)', strength: 'mandatory', enabled: true },
-    { id: 'm-en-no', label: '英文：shall not / will be rejected', pattern: '\\b(shall not|must not|will be rejected|liable to be rejected|not be (?:accepted|considered)|disqualified)\\b', strength: 'prohibited', enabled: true },
+    { id: 'm-en-must', label: '英文强制：must / mandatory / essential', pattern: '\\b(must|mandatory|mandatorily|essential(?:ly)? required|minimum (?:eligibility|qualification) (?:criteria|requirements?))\\b', strength: 'mandatory', enabled: true },
+    { id: 'm-en-shall', label: '英文一般要求：shall / is required to', pattern: '\\b(shall|is required to|are required to)\\b', strength: 'required', enabled: true },
+    { id: 'm-en-no', label: '英文否决：will be rejected / disqualified', pattern: '\\b(will be rejected|shall be rejected|liable (?:to be|for) reject(?:ed|ion)|(?:bids?|proposals?|offers?|tenders?) (?:will|shall) not be (?:accepted|considered|evaluated)|disqualif(?:ied|ication)|non-?responsive)\\b', strength: 'prohibited', enabled: true },
     { id: 'm-should', label: '建议性：宜 / should / preferably', pattern: '(\\bshould\\b|\\bpreferabl|\\brecommended\\b|宜(?:采用|设置|选用))', strength: 'recommended', enabled: true },
   ],
   fields: [

@@ -8,7 +8,7 @@ import { Btn, Modal, Pill, RoundTag, cx } from '../ui';
 import type { Tone } from '../ui';
 
 const ST_TONE: Record<PlanStatus, Tone> = { 未开始: 'gray', 进行中: 'blue', 已完成: 'green', 已逾期: 'red' };
-const BAR: Record<string, string> = { 技术: 'blue', 交付: 'green', 商务: 'purple' };
+const BAR: Record<string, string> = { 技术: 'blue', 交付: 'green', 商务: 'purple', 价格: 'orange', 偏差: 'red' };
 const toDate = (d: string) => new Date(d + 'T00:00:00');
 const fmt = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 const addDays = (d: string, n: number) => { const x = toDate(d); x.setDate(x.getDate() + n); return fmt(x); };

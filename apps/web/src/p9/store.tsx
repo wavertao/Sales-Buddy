@@ -102,6 +102,7 @@ export function P9Provider({ api, user, onExit, children }: { api: Api; user: an
       setNode(b.node);
       if (b.todos.length) setTodos(b.todos);
       if (b.clars.length) setClars(b.clars);
+      if (b.plan.length) setPlan(b.plan);
     });
     return () => { alive = false; };
   }, [api, bidId, online, user?.id]);

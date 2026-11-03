@@ -19,7 +19,7 @@ import { extractFile, type Extracted, type SourceFile } from './extract.ts';
 const MAX_ITEMS = 1500;
 const MAX_OVERRIDES = 200;
 const CLAUSE_TEXT_CAP = 600;
-const STRENGTH_RANK: Record<Strength, number> = { prohibited: 3, mandatory: 2, recommended: 1 };
+const STRENGTH_RANK: Record<Strength, number> = { prohibited: 4, mandatory: 3, required: 2, recommended: 1 };
 const SEVERITY_RANK: Record<Severity, number> = { high: 3, medium: 2, low: 1 };
 
 const safe = (src: string, flags = 'iu'): RegExp | null => { try { return new RegExp(src, flags); } catch { return null; } };
@@ -342,7 +342,7 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
   for (const w of work) {
     for (const cl of w.clauses) {
       const tag = tagClause(c, cl.text, cl.section.title);
-      const strong = tag.strength === 'mandatory' || tag.strength === 'prohibited';
+      const strong = tag.strength === 'mandatory' || tag.strength === 'prohibited' || tag.strength === 'required';
       const keep = tag.risks.length > 0 || (strong && tag.score >= minCategoryScore) || (w.file.role === 'clarification' && tag.score >= minCategoryScore);
       if (!keep || !tag.category) continue;
       const key = cl.text.slice(0, 140).toLowerCase().replace(/[^a-z0-9一-龥]/g, '');

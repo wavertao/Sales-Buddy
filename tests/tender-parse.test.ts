@@ -116,3 +116,13 @@ test('TENDER-05 投标内解析：按「类别 + 文件」合并成分解条目�
   assert.equal(now.result?.id, again.result.id);
   assert.equal(now.doc?.version, 'v2');
 });
+
+test('TENDER-06 强度分层：shall / 应当 只算一般要求，must / 必须 才算强制，废标 / rejected 算否决', () => {
+  const tag = (s: string) => previewText(rules(), `第一章 技术要求\n1.1 ${s}`).clauses[0]?.strength;
+  assert.equal(tag('The Supplier shall supply the BESS within 11 months of the effective date.'), 'required');
+  assert.equal(tag('The Bidder must submit the UL9540A test report with its technical proposal.'), 'mandatory');
+  assert.equal(tag('Bids without the earnest money deposit will be rejected as non-responsive.'), 'prohibited');
+  assert.equal(tag('投标人应当提供近三年储能项目业绩证明材料。'), 'required');
+  assert.equal(tag('投标人必须提供电芯原厂授权书，并加盖公章。'), 'mandatory');
+  assert.equal(tag('投标报价高于最高投标限价的，作废标处理。'), 'prohibited');
+});

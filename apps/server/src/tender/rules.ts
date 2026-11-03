@@ -26,7 +26,7 @@ export const ruleSetSchema = z.object({
   })),
   headings: z.array(z.object({ id, label, pattern: regex, level: z.number().int().min(1).max(4), enabled: z.boolean() })),
   categories: z.array(z.object({ id, label, category, keywords: words, weight: z.number().min(0).max(10), enabled: z.boolean() })),
-  mandatory: z.array(z.object({ id, label, pattern: regex, strength: z.enum(['mandatory', 'prohibited', 'recommended']), enabled: z.boolean() })),
+  mandatory: z.array(z.object({ id, label, pattern: regex, strength: z.enum(['prohibited', 'mandatory', 'required', 'recommended']), enabled: z.boolean() })),
   fields: z.array(z.object({
     id, label, key: z.string().regex(/^[a-z][a-z0-9_]*$/, '字段 key 只能用小写字母、数字、下划线'), pattern: regex,
     normalize: z.enum(['number', 'date', 'text']), unit: z.string().max(20).optional(), checkConflict: z.boolean(), enabled: z.boolean(),
@@ -50,7 +50,11 @@ function seedDefault(): TenderRuleSet {
 
 export function getRules(): TenderRuleSet {
   const cur = get<TenderRuleSet>('tender_rules', ACTIVE);
-  if (cur) return cur;
+  // 从没人改过的系统默认规则跟着代码里的默认值走（默认规则升级后自动生效）；改过的版本保持不动
+  const body = ({ version: _v, updatedAt: _a, updatedBy: _b, ...r }: TenderRuleSet) => JSON.stringify(r);
+  const stale = cur && cur.updatedBy === '系统默认' && body(cur) !== body(seedDefault());
+  if (cur && !stale) return cur;
+  if (stale) { const next = { ...seedDefault(), version: cur.version }; put('tender_rules', ACTIVE, next); put('tender_rules_history', `v${next.version}`, next); return next; }
   const seeded = seedDefault();
   put('tender_rules', ACTIVE, seeded);
   put('tender_rules_history', `v${seeded.version}`, seeded);
