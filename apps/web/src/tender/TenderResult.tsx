@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, FileText, GitBranch, ListChecks, RotateCcw, Search, Sparkles } from "lucide-react";
-import type { DecompItem, FieldSummary, FileRole, JudgeSource, Severity, Strength, TenderCategory, TenderParseResult } from "../../../../packages/contracts/tender";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, FileText, GitBranch, ListChecks, RotateCcw, Search, Sparkles, X } from "lucide-react";
+import type { ClauseReview, DecompItem, ExcludedClause, FieldSummary, FileRole, JudgeSource, Severity, Strength, TenderCategory, TenderParseResult } from "../../../../packages/contracts/tender";
 import { TENDER_CATEGORIES } from "../../../../packages/contracts/tender";
 import "./tender.css";
 
@@ -17,7 +17,67 @@ export const FIELD_STATUS: Record<FieldSummary['status'], [string, string]> = {
   single: ['单一来源', 'gray'], consistent: ['多处一致', 'green'], overridden: ['已被修订', 'blue'], conflict: ['待核对', 'orange'],
 };
 export const fmtSize = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
-export const SOURCE_LABEL: Record<JudgeSource, string> = { model: '模型', rule: '规则', mock: '测试判断' };
+export const SOURCE_LABEL: Record<JudgeSource, string> = { model: '模型', rule: '规则', mock: '测试判断', human: '人工' };
+/** 提交一条人工结论；不传时分解表只读。 */
+export type ReviewFn = (clauseKey: string, body: ClauseReview) => Promise<void>;
+
+/** 条款详情里的复核表单：确认、改类别和强度、排除。 */
+function ReviewForm({ it, onReview }: { it: DecompItem; onReview: ReviewFn }) {
+  const [category, setCategory] = useState<TenderCategory>(it.category);
+  const [strength, setStrength] = useState<Strength | ''>(it.strength || '');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const changed = category !== it.category || strength !== (it.strength || '');
+  const submit = async (isRequirement: boolean) => {
+    setBusy(true);
+    try { await onReview(it.clauseKey!, { isRequirement, category: isRequirement ? category : undefined, strength: isRequirement && strength ? strength : undefined, note: note.trim() || undefined }); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="tp-review-form" onClick={(e) => e.stopPropagation()}>
+      <select value={category} onChange={(e) => setCategory(e.target.value as TenderCategory)} aria-label="类别">{TENDER_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}</select>
+      <select value={strength} onChange={(e) => setStrength(e.target.value as Strength | '')} aria-label="强度"><option value="">无强度</option>{Object.entries(STRENGTH_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+      <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="说明（可选）" maxLength={300} />
+      <button type="button" className="tp-btn primary" disabled={busy} onClick={() => void submit(true)}><Check size={12} />{changed ? '保存改判' : '确认无误'}</button>
+      <button type="button" className="tp-btn" disabled={busy} onClick={() => void submit(false)}><X size={12} />不是要求</button>
+    </div>
+  );
+}
+
+/** 没进分解表的条款：看看漏了什么，有用的捞回来。 */
+export function ExcludedCard({ rows, onReview }: { rows: ExcludedClause[]; onReview?: ReviewFn }) {
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [q]);
+  const hit = useMemo(() => rows.filter((e) => !q || (e.text + e.fileName + e.section + e.reason).toLowerCase().includes(q.toLowerCase())), [rows, q]);
+  const PAGE = 20;
+  const pages = Math.max(1, Math.ceil(hit.length / PAGE));
+  return (
+    <div className="tp-card">
+      <div className="tp-filters"><span className="tp-muted">这些条款没有进分解表，可以核对后捞回</span><label className="tp-search"><Search size={13} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜条款原文、文件、原因" /></label></div>
+      <table className="tp-table tp-decomp">
+        <thead><tr><th>条款原文</th><th>没进表的原因</th><th>出处</th>{onReview && <th />}</tr></thead>
+        <tbody>
+          {hit.slice(page * PAGE, page * PAGE + PAGE).map((e) => (
+            <tr key={e.clauseKey}>
+              <td className="tp-req">{e.text}</td>
+              <td className="tp-small">{e.reason}</td>
+              <td className="tp-src" title={`${e.fileName} · ${e.section}`}>{e.fileName}<span>第 {e.page} 页 · {e.section}</span></td>
+              {onReview && <td><button type="button" className="tp-btn" onClick={() => void onReview(e.clauseKey, { isRequirement: true, category: e.ruleCategory || 'commercial', strength: e.ruleStrength })}><RotateCcw size={12} />捞回</button></td>}
+            </tr>
+          ))}
+          {!hit.length && <tr><td colSpan={4} className="tp-muted tp-pad">没有符合条件的条款</td></tr>}
+        </tbody>
+      </table>
+      <div className="tp-pager">
+        <span className="tp-muted">共 {hit.length} 条</span>
+        <button type="button" className="tp-btn" disabled={page === 0} onClick={() => setPage(page - 1)}>上一页</button>
+        <span>{page + 1} / {pages}</span>
+        <button type="button" className="tp-btn" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>下一页</button>
+      </div>
+    </div>
+  );
+}
 
 /** 说清这次结果是谁判的：模型判了多少、排除多少、要人看多少；没过模型的明确写出来。 */
 export function JudgeNote({ r }: { r: TenderParseResult }) {
@@ -113,7 +173,7 @@ export function OverridesCard({ r }: { r: TenderParseResult }) {
   );
 }
 
-export function DecompCard({ r }: { r: TenderParseResult }) {
+export function DecompCard({ r, onReview }: { r: TenderParseResult; onReview?: ReviewFn }) {
   const [cat, setCat] = useState<TenderCategory | 'all'>('all');
   const [only, setOnly] = useState<'all' | 'strong' | 'risk' | 'amended' | 'review'>('all');
   const [q, setQ] = useState('');
@@ -143,7 +203,7 @@ export function DecompCard({ r }: { r: TenderParseResult }) {
       <table className="tp-table tp-decomp">
         <thead><tr><th>编号</th><th>类别</th><th>要求</th><th>强度</th><th>风险</th><th>出处</th><th>负责 / 复核</th><th>截止</th></tr></thead>
         <tbody>
-          {shown.map((it) => <DecompRow key={it.id} it={it} open={open === it.id} toggle={() => setOpen(open === it.id ? null : it.id)} />)}
+          {shown.map((it) => <DecompRow key={it.id} it={it} open={open === it.id} toggle={() => setOpen(open === it.id ? null : it.id)} onReview={onReview} />)}
           {!shown.length && <tr><td colSpan={8} className="tp-muted tp-pad">没有符合条件的要求</td></tr>}
         </tbody>
       </table>
@@ -157,7 +217,7 @@ export function DecompCard({ r }: { r: TenderParseResult }) {
   );
 }
 
-export function DecompRow({ it, open, toggle }: { it: DecompItem; open: boolean; toggle: () => void }) {
+export function DecompRow({ it, open, toggle, onReview }: { it: DecompItem; open: boolean; toggle: () => void; onReview?: ReviewFn }) {
   const top = it.risks.reduce<Severity | null>((m, x) => (!m || (x.severity === 'high') || (x.severity === 'medium' && m === 'low') ? x.severity : m), null);
   return (
     <>
@@ -168,6 +228,7 @@ export function DecompRow({ it, open, toggle }: { it: DecompItem; open: boolean;
           {it.amended && <span className="tp-pill blue">已修订</span>}
           {it.fileRole === 'clarification' && <span className="tp-pill purple">澄清</span>}
           {it.needsReview && <span className="tp-pill orange" title={it.reviewReasons?.join('；')}>待确认</span>}
+          {it.source === 'human' && <span className="tp-pill green">已复核</span>}
           {it.summary || it.title}
         </td>
         <td>{it.strength ? <span className={'tp-pill ' + (it.strength === 'prohibited' ? 'red' : it.strength === 'mandatory' ? 'dark' : 'gray')}>{STRENGTH_LABEL[it.strength]}</span> : <span className="tp-muted">–</span>}</td>
@@ -189,6 +250,7 @@ export function DecompRow({ it, open, toggle }: { it: DecompItem; open: boolean;
             {it.source !== 'rule' && it.ruleStrength && it.ruleStrength !== it.strength ? ` · 规则判为${STRENGTH_LABEL[it.ruleStrength]}` : ''}
             {' '}· 分类得分 {it.score} · 来源文件角色：{ROLE_LABEL[it.fileRole]}
           </div>
+          {onReview && it.clauseKey && <ReviewForm key={`${it.category}-${it.strength}`} it={it} onReview={onReview} />}
         </td></tr>
       )}
     </>

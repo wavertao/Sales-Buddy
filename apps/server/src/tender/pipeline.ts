@@ -291,6 +291,28 @@ const addDays = (iso: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+/** 分解表的统计项：解析和人工改判后都按这里重算。 */
+export function itemStats(items: DecompItem[]) {
+  const byCategory = Object.fromEntries(TENDER_CATEGORIES.map((k) => [k.key, items.filter((i) => i.category === k.key).length])) as Record<TenderCategory, number>;
+  const risks = { high: 0, medium: 0, low: 0 } as Record<Severity, number>;
+  for (const it of items) for (const r of it.risks) risks[r.severity]++;
+  return { byCategory, risks, mandatory: items.filter((i) => i.strength === 'mandatory' || i.strength === 'prohibited').length };
+}
+/** 按责任分工规则带出负责、复核和倒排截止；改判换类别时也走这里。 */
+export function ownerFields(rules: TenderRuleSet, category: TenderCategory, deadlineIso?: string) {
+  const owner = rules.owners.find((o) => o.category === category);
+  return {
+    owner: (owner?.role || 'SLS') as TeamRole, reviewer: (owner?.reviewer || 'BSD') as TeamRole,
+    dueDate: deadlineIso && owner ? addDays(deadlineIso, owner.dueOffsetDays) : undefined,
+  };
+}
+export const deadlineOf = (fields: FieldSummary[]) => {
+  const d = fields.find((f) => f.key === 'deadline');
+  const iso = d?.values.find((v) => v.value === d.value)?.normalized || '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : undefined;
+};
+export const titleOfClause = (text: string) => titleOf(text);
+
 export type ParseOptions = { judge?: JudgeRunner; onProgress?: (p: TenderProgress) => void; onExcluded?: (runId: string, excluded: ExcludedClause[]) => void };
 
 export async function parsePackage(rules: TenderRuleSet, packageName: string, files: SourceFile[], source: 'sample' | 'upload', opts: ParseOptions = {}): Promise<TenderParseResult> {
@@ -343,9 +365,7 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
   const amendedSections = new Set(overrides.filter((o) => o.target).map((o) => `${o.target!.fileName}::${o.target!.section}`));
 
   // 4 条款打标 → 拆标分解表
-  const deadline = fields.find((f) => f.key === 'deadline');
-  const deadlineIso = deadline && /^\d{4}-\d{2}-\d{2}$/.test(deadline.values.find((v) => v.value === deadline.value)?.normalized || '')
-    ? deadline.values.find((v) => v.value === deadline.value)!.normalized : undefined;
+  const deadlineIso = deadlineOf(fields);
   const rows = work.flatMap((w) => w.clauses.map((cl) => {
     const tag = tagClause(c, cl.text, cl.section.title);
     const strong = tag.strength === 'mandatory' || tag.strength === 'prohibited' || tag.strength === 'required';
@@ -368,20 +388,20 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
       ? mergeVerdict({ keep, category: tag.category, strength: tag.strength, risks: ruleRisks }, outcome.verdicts.get(key), rules.judge.minConfidence, outcome.source)
       : { include: keep, category: tag.category, strength: tag.strength, risks: ruleRisks, source: 'rule', needsReview: false, reviewReasons: [] };
     if (!m.include) {
-      if (m.excludedBecause) excluded.push({ clauseKey: key, text: cl.text.slice(0, CLAUSE_TEXT_CAP), fileName: w.file.name, section: cl.section.title, page: cl.page, reason: m.excludedBecause });
+      // 有信号但没进表的都留下来，人才能看到漏了什么；完全没信号的是封面、目录这类，不存
+      const reason = m.excludedBecause || (tag.strength || tag.risks.length || tag.score > 0 ? '规则没有选中' : '');
+      if (reason) excluded.push({ clauseKey: key, text: cl.text.slice(0, CLAUSE_TEXT_CAP), fileId: w.file.id, fileName: w.file.name, fileRole: w.file.role, section: cl.section.title, page: cl.page, reason, score: tag.score, amended: amendedSections.has(`${w.file.name}::${cl.section.title}`), ruleCategory: tag.category, ruleStrength: tag.strength });
       continue;
     }
     if (!m.category) continue;
     const dedupe = cl.text.slice(0, 140).toLowerCase().replace(/[^a-z0-9一-龥]/g, '');
     if (seen.has(dedupe)) continue;
     seen.add(dedupe);
-    const owner = c.owners.get(m.category);
     items.push({
       id: '', no: 0, category: m.category, title: titleOf(cl.text), text: cl.text.slice(0, CLAUSE_TEXT_CAP),
       strength: m.strength, risks: m.risks,
       fileId: w.file.id, fileName: w.file.name, fileRole: w.file.role, section: cl.section.title, page: cl.page,
-      owner: (owner?.role || 'SLS') as TeamRole, reviewer: (owner?.reviewer || 'BSD') as TeamRole,
-      dueDate: deadlineIso && owner ? addDays(deadlineIso, owner.dueOffsetDays) : undefined,
+      ...ownerFields(rules, m.category, deadlineIso),
       score: tag.score, amended: amendedSections.has(`${w.file.name}::${cl.section.title}`),
       clauseKey: key, source: m.source, summary: m.summary, quote: m.quote, reason: m.reason, confidence: m.confidence,
       needsReview: m.needsReview || undefined, reviewReasons: m.reviewReasons.length ? m.reviewReasons : undefined,
@@ -405,13 +425,11 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
   if (!deadlineIso) warnings.push('没有识别到投标截止时间，分解表的倒排截止日留空');
 
   const parsed = work.map((w) => w.file);
-  const byCategory = Object.fromEntries(TENDER_CATEGORIES.map((k) => [k.key, items.filter((i) => i.category === k.key).length])) as Record<TenderCategory, number>;
-  const risks = { high: 0, medium: 0, low: 0 } as Record<Severity, number>;
-  for (const it of items) for (const r of it.risks) risks[r.severity]++;
+  const { byCategory, risks, mandatory } = itemStats(items);
   const judge: JudgeSummary = outcome ? {
     mode: outcome.source, model: outcome.model, candidates: new Set(candidates.map((x) => x.key)).size, batches: outcome.batches, failedBatches: outcome.failedBatches,
     cached: outcome.cached, unverified: items.filter((i) => i.source === 'rule').length, excluded: excluded.length, needsReview: items.filter((i) => i.needsReview).length, note: outcome.note,
-  } : { mode: 'rule', candidates: 0, batches: 0, failedBatches: 0, cached: 0, unverified: items.length, excluded: 0, needsReview: 0 };
+  } : { mode: 'rule', candidates: 0, batches: 0, failedBatches: 0, cached: 0, unverified: items.length, excluded: excluded.length, needsReview: 0 };
   if (outcome?.note) warnings.push(outcome.note);
   const id = uid('tender');
   if (excluded.length) opts.onExcluded?.(id, excluded);
@@ -422,7 +440,7 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
       files: parsed.length, pages: parsed.reduce((s, f) => s + f.pages, 0),
       scannedFiles: parsed.filter((f) => f.status === 'scanned').length,
       unsupportedFiles: parsed.filter((f) => f.status === 'unsupported' || f.status === 'error').length,
-      items: items.length, mandatory: items.filter((i) => i.strength === 'mandatory' || i.strength === 'prohibited').length,
+      items: items.length, mandatory,
       risks, byCategory, conflicts: fields.filter((f) => f.status === 'conflict').length,
     },
     warnings, truncated,

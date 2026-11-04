@@ -212,6 +212,9 @@
 .tp-review svg { flex: none; margin-top: 2px; }
 .tp-evidence { margin: 6px 0; font-size: 12px; color: var(--text-2); }
 .tp-evidence b { margin-right: 8px; color: var(--text-1, inherit); }
+.tp-review-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.tp-review-form select, .tp-review-form input { height: 28px; border: 1px solid var(--border); border-radius: 8px; padding: 0 8px; font-size: 12px; background: #fff; }
+.tp-review-form input { flex: 1; min-width: 140px; }
 .tp-judge { display: flex; flex-direction: column; gap: 14px; }
 .tp-judge-text { width: 100%; min-height: 180px; border: 1px solid var(--border); border-radius: 10px; padding: 10px; font-family: var(--font-primary, "Microsoft YaHei"), sans-serif; font-size: 12px; line-height: 1.6; resize: vertical; }
 .tp-judge-text.short { min-height: 88px; }

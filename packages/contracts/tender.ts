@@ -132,13 +132,23 @@ export interface DecompItem {
   /** 规则原本的判断，模型改过时用来对照 */
   ruleCategory?: TenderCategory; ruleStrength?: Strength;
 }
-export type JudgeSource = 'model' | 'rule' | 'mock';
+export type JudgeSource = 'model' | 'rule' | 'mock' | 'human';
+/** 人工改判：同一投标下按 clauseKey 记一条，重传新版后继续生效；也是后续自进化的标准答案。 */
+export interface ClauseReview { isRequirement: boolean; category?: TenderCategory; strength?: Strength; note?: string }
+export interface TenderFeedback extends ClauseReview {
+  bidId: string; clauseKey: string; text: string; fileName: string; section: string;
+  before: { isRequirement: boolean; category?: TenderCategory; strength?: Strength; source?: JudgeSource };
+  by: string; at: string;
+}
 export interface JudgeSummary {
   mode: JudgeSource; model?: string | null; candidates: number; batches: number; failedBatches: number;
   cached: number; unverified: number; excluded: number; needsReview: number; note?: string;
 }
-/** 模型判定不是要求、没进分解表的条款，留着供核对和捞回。 */
-export interface ExcludedClause { clauseKey: string; text: string; fileName: string; section: string; page: number; reason: string }
+/** 没进分解表的条款（模型判定不是要求、规则没选中、人工排除），留着供核对和捞回。 */
+export interface ExcludedClause {
+  clauseKey: string; text: string; fileId: string; fileName: string; fileRole: FileRole; section: string; page: number; reason: string;
+  score: number; amended: boolean; ruleCategory?: TenderCategory; ruleStrength?: Strength;
+}
 export interface TenderProgress { stage: 'extract' | 'judge' | 'summary'; done: number; total: number; message: string }
 export interface TenderJob {
   id: string; status: 'running' | 'done' | 'failed'; bidId?: string; by: string; packageName: string;

@@ -228,6 +228,66 @@ test('TENDER-12 旧规则补默认 judge；后台任务完成写入、失败如�
   assert.equal(getJob('orphan').status, 'failed', '进程里没有的运行中任务算中断');
 });
 
+test('TENDER-13 人工复核：改判、排除、捞回同步分解条目，重传后保留，且只给主管和管理员', async () => {
+  const { seed } = await import('../apps/server/src/seed.ts');
+  const { seedP9 } = await import('../apps/server/src/p9/seed-p9.ts');
+  const C = await import('../apps/server/src/crm.ts');
+  const S = await import('../apps/server/src/p9/service.ts');
+  seed(); seedP9();
+  const adminUser = C.user('U-ADMIN');
+  const bid = S.listBids(adminUser, {}).records[1];
+  const body = `${RFP}\n5.3 电池舱之间预留检修通道，宽度 1.2 米，便于后期运维。`;
+  const files = [txt('招标文件正文.txt', body)];
+  await S.parseTenderForBid(adminUser, bid.id, { upload: { name: '包', files } });
+  let now = S.tenderForBid(adminUser, bid.id);
+  assert.equal(now.canReview, true);
+
+  // 规则丢掉的条款也留存，可以捞回
+  const lost = S.tenderExcluded(adminUser, bid.id).find((e) => e.text.includes('检修通道'))!;
+  assert.ok(lost, '规则没选中的条款要留存');
+  now = S.reviewTenderClause(adminUser, bid.id, lost.clauseKey, { isRequirement: true, category: 'technical', strength: 'mandatory' });
+  const back = now.result!.items.find((i) => i.clauseKey === lost.clauseKey)!;
+  assert.equal(back.source, 'human');
+  assert.equal(back.owner, 'SC');
+  assert.ok(!S.tenderExcluded(adminUser, bid.id).some((e) => e.clauseKey === lost.clauseKey));
+
+  // 改判换类别：责任角色跟着变，统计和分解条目同步
+  const fire = now.result!.items.find((i) => i.text.includes('UL9540A'))!;
+  now = S.reviewTenderClause(adminUser, bid.id, fire.clauseKey!, { isRequirement: true, category: 'commercial', strength: 'mandatory', note: '资格要求' });
+  const moved = now.result!.items.find((i) => i.clauseKey === fire.clauseKey)!;
+  assert.equal(moved.owner, 'SLS');
+  assert.equal(moved.strength, 'mandatory', '人可以下调否决');
+  assert.equal(now.result!.stats.items, now.result!.items.length);
+  const all = now.items.reduce((n, x) => n + Number(x.requirementCount), 0);
+  assert.equal(all, now.result!.items.length, '每条要求恰好落在一个条目里');
+
+  // 排除
+  const liab = now.result!.items.find((i) => i.text.includes('无限责任'))!;
+  now = S.reviewTenderClause(adminUser, bid.id, liab.clauseKey!, { isRequirement: false, note: '不适用' });
+  assert.ok(!now.result!.items.some((i) => i.clauseKey === liab.clauseKey));
+  assert.ok(S.tenderExcluded(adminUser, bid.id).some((e) => e.clauseKey === liab.clauseKey && e.reason.includes('不适用')));
+
+  // 重传新版：人工结论继续生效
+  await S.parseTenderForBid(adminUser, bid.id, { upload: { name: '包', files } });
+  now = S.tenderForBid(adminUser, bid.id);
+  assert.equal(now.doc?.version, 'v2');
+  assert.equal(now.result!.items.find((i) => i.clauseKey === fire.clauseKey)?.category, 'commercial');
+  assert.ok(now.result!.items.some((i) => i.clauseKey === lost.clauseKey));
+  assert.ok(!now.result!.items.some((i) => i.clauseKey === liab.clauseKey));
+
+  // 第二次改判保留机器最初的判断
+  S.reviewTenderClause(adminUser, bid.id, fire.clauseKey!, { isRequirement: true, category: 'technical', strength: 'prohibited' });
+  const { get } = await import('../apps/server/src/db.ts');
+  assert.equal(get<{ before: { category: string } }>('tender_feedback', `${bid.id}:${fire.clauseKey}`)?.before.category, 'technical');
+
+  assert.throws(() => S.reviewTenderClause(adminUser, bid.id, 'nope', { isRequirement: false }), /不在本次解析结果/);
+  assert.throws(() => S.reviewTenderClause(adminUser, bid.id, fire.clauseKey!, { isRequirement: true }), /必须选类别/);
+  const { users } = await import('../apps/server/src/crm.ts');
+  const rep = (users() as (typeof adminUser)[]).filter((x) => x.role === 'sales').map((x) => ({ x, b: S.listBids(x, {}).records[0] })).find((v) => v.b)!;
+  assert.equal(S.tenderForBid(rep.x, rep.b.id).canReview, false);
+  assert.throws(() => S.reviewTenderClause(rep.x, rep.b.id, 'any', { isRequirement: false }), /主管或管理员/);
+});
+
 test('TENDER-06 强度分层：shall / 应当 只算一般要求，must / 必须 才算强制，废标 / rejected 算否决', () => {
   const tag = (s: string) => previewText(rules(), `第一章 技术要求\n1.1 ${s}`).clauses[0]?.strength;
   assert.equal(tag('The Supplier shall supply the BESS within 11 months of the effective date.'), 'required');

@@ -83,6 +83,15 @@ r.post('/bids/:id/tender/upload', upload.array('files', 60), (req, res) => {
   });
   res.json(S.startTenderJobForBid(u(req, res), String(req.params.id), { upload: { name: String((req.body as { name?: string }).name || ''), files } }));
 });
+// 人工复核：改判 / 确认 / 排除 / 捞回都走这一个接口，只给主管和管理员
+const clauseReviewSchema = z.object({
+  isRequirement: z.boolean(),
+  category: z.enum(['technical', 'delivery', 'price', 'commercial', 'deviation']).optional(),
+  strength: z.enum(['prohibited', 'mandatory', 'required', 'recommended']).optional(),
+  note: z.string().max(300).optional(),
+});
+r.get('/bids/:id/tender/excluded', (req, res) => res.json(S.tenderExcluded(u(req, res), req.params.id)));
+r.patch('/bids/:id/tender/clauses/:key', (req, res) => res.json(S.reviewTenderClause(u(req, res), req.params.id, req.params.key, parse(clauseReviewSchema, req.body))));
 r.post('/bids/:id/ai/decompose', async (req, res) => res.json(await S.aiDecomposeRoute(u(req, res), req.params.id, ((req.body as { documentId?: string } | undefined)?.documentId) || undefined)));
 r.post('/bids/:id/ai/dispatch', (req, res) => res.json(S.aiDispatch(u(req, res), req.params.id)));
 r.get('/bids/:id/ai/status', (req, res) => res.json(S.aiStatus(u(req, res), req.params.id)));

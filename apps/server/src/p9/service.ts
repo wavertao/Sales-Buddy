@@ -10,8 +10,10 @@ import { allocateBidNumber, canViewQuote, childById, children, collections, load
 import { allowedRecord, canAccess } from '../crm.ts';
 import { allRecords, record } from '../db.ts';
 import { TENDER_CATEGORIES } from '../../../../packages/contracts/tender.ts';
-import type { DecompItem, TenderCategory, TenderProgress } from '../../../../packages/contracts/tender.ts';
+import type { ClauseReview, DecompItem, TenderCategory, TenderParseResult, TenderProgress } from '../../../../packages/contracts/tender.ts';
 import { getRun, parseSample, parseUpload, runningJobForBid, startJob } from '../tender/service.ts';
+import { getRules } from '../tender/rules.ts';
+import { applyFeedback, excludedOf, reviewClause } from '../tender/review.ts';
 import type { SourceFile } from '../tender/extract.ts';
 
 /** 业务时钟日期（db.now() 的日期部分，仓库约定；绝不硬编码 2026-10-24，演示时钟由 BUSINESS_CLOCK 控制）。 */
@@ -699,6 +701,14 @@ export async function parseTenderForBid(user: User, bidId: string, input: { samp
     chapters: [], parseStatus: 'parsed', parseError: null, tenderRunId: result.id,
   };
   saveChild(doc);
+  applyFeedback(bid.id, result, getRules());
+  const out = syncTenderItems(bid, result);
+  let next = loadBid(user, bidId);
+  if (['idle', 'planning', 'plan_draft', 'decomposing'].includes(next.aiPipeline)) next = saveBid({ ...next, aiPipeline: 'decomposing', aiLastError: null });
+  return { doc, result, items: out, pipeline: next.aiPipeline };
+}
+/** 按「类别 + 文件」写回分解条目。已开始的条目不动；没开始的条目如果要求被改走了，清零留痕，不删除。 */
+function syncTenderItems(bid: P9Bid, result: TenderParseResult) {
   const groups = new Map<string, DecompItem[]>();
   for (const it of result.items) {
     const k = `${it.category}|${it.fileName}`;
@@ -729,9 +739,34 @@ export async function parseTenderForBid(user: User, bidId: string, input: { samp
       : { ...childBase(bid, newId('BI'), 'bid_item', fields.title), ...fields, node: 3 as BidItem['node'], assigneeId: null, start: today, status: 'pending', deliverable: '', dependsOn: [] };
     out.push(saveChild(rec));
   }
-  let next = loadBid(user, bidId);
-  if (['idle', 'planning', 'plan_draft', 'decomposing'].includes(next.aiPipeline)) next = saveBid({ ...next, aiPipeline: 'decomposing', aiLastError: null });
-  return { doc, result, items: out, pipeline: next.aiPipeline };
+  for (const [key, prev] of existing) {
+    if (groups.has(key) || prev.status !== 'pending' || !prev.requirementCount) continue;
+    saveChild({ ...prev, tenderRunId: result.id, requirementIds: [], requirementCount: 0, mandatoryCount: 0, riskCount: 0, reviewCount: 0, sourceClause: `${String(prev.sourceClause).split(' · ')[0]} · 要求已全部改走`, updatedAt: stamp() });
+  }
+  return out;
+}
+const reviewer = (user: User) => {
+  if (user.role !== 'admin' && user.role !== 'manager') throw new AppError('FORBIDDEN', '只有主管或管理员可以改判', 403);
+  return user;
+};
+const latestRun = (bidId: string) => {
+  const ver = (d: BidDoc) => Number(String(d.version).replace(/\D/g, '')) || 0;
+  const doc = children<BidDoc>(bidId, 'bid_doc').filter((d) => d.tenderRunId).sort((a, b) => ver(b) - ver(a))[0];
+  if (!doc) throw new AppError('NOT_FOUND', '这个投标还没有解析结果', 404);
+  return getRun(String(doc.tenderRunId));
+};
+/** 人工改判、确认、排除或捞回一条条款，然后同步分解条目。解析进行中不能改，否则结果会被覆盖。 */
+export function reviewTenderClause(user: User, bidId: string, key: string, body: ClauseReview) {
+  const bid = loadBid(user, bidId);
+  reviewer(user);
+  if (runningJobForBid(bidId)) throw new AppError('CONFLICT', '正在解析，请等解析完成后再改判', 409);
+  const result = reviewClause(user.name, bidId, latestRun(bidId), getRules(), key, body);
+  syncTenderItems(bid, result);
+  return tenderForBid(user, bidId);
+}
+export function tenderExcluded(user: User, bidId: string) {
+  loadBid(user, bidId);
+  return excludedOf(latestRun(bidId).id);
 }
 /** 后台跑解析：立即返回任务，前端轮询 /tender/jobs/:id。同一个投标同时只跑一个。 */
 export function startTenderJobForBid(user: User, bidId: string, input: { sample?: string; upload?: { name: string; files: SourceFile[] } }) {
@@ -747,7 +782,8 @@ export function tenderForBid(user: User, bidId: string) {
   // 业务时钟可能固定，createdAt 会相同，按版本号取最新
   const ver = (d: BidDoc) => Number(String(d.version).replace(/\D/g, '')) || 0;
   const doc = children<BidDoc>(bidId, 'bid_doc').filter((d) => d.tenderRunId).sort((a, b) => ver(b) - ver(a))[0];
-  if (!doc) return { doc: null, result: null, items: [], job };
-  const items = children<BidItem>(bidId, 'bid_item').filter((x) => x.tenderKey);
-  return { doc, result: getRun(String(doc.tenderRunId)), items, job };
+  const canReview = user.role === 'admin' || user.role === 'manager';
+  if (!doc) return { doc: null, result: null, items: [], job, canReview };
+  const items = children<BidItem>(bidId, 'bid_item').filter((x) => x.tenderKey && (x.requirementCount || x.status !== 'pending'));
+  return { doc, result: getRun(String(doc.tenderRunId)), items, job, canReview };
 }

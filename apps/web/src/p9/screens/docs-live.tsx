@@ -2,16 +2,16 @@
 // 解析结果按「类别 + 文件」合并成分解条目写回投标（bid_item），点条目可展开看它包含的原始要求。
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, CircleCheck, Download, FileUp, FolderInput, FolderOpen, Globe, HardDrive, Info, Loader, Send, Upload } from 'lucide-react';
-import type { DecompItem, TenderJob, TenderParseResult, TenderProgress } from '../../../../../packages/contracts/tender';
+import type { DecompItem, ExcludedClause, TenderJob, TenderParseResult, TenderProgress } from '../../../../../packages/contracts/tender';
 import { TENDER_CATEGORIES } from '../../../../../packages/contracts/tender';
-import { CAT_LABEL, DecompCard, DecompRow, FieldsCard, FilesCard, JudgeNote, Kpi, OverridesCard, exportCsv, fmtSize } from '../../tender/TenderResult';
+import { CAT_LABEL, DecompCard, DecompRow, ExcludedCard, FieldsCard, FilesCard, JudgeNote, Kpi, OverridesCard, exportCsv, fmtSize, type ReviewFn } from '../../tender/TenderResult';
 import { mapPlan } from '../live';
 import { useP9 } from '../store';
 import { Btn, Pill, cx } from '../ui';
 
 type Sample = { id: string; name: string; kind: 'single' | 'package'; files: number; size: number };
 type WorkItem = { id: string; title: string; category: string; sourceClause: string; assigneeRole: string; reviewerRole?: string; end: string; status: string; requirementIds?: string[]; requirementCount?: number; mandatoryCount?: number; riskCount?: number; reviewCount?: number; amended?: boolean };
-type Bundle = { doc: { filename: string; version: string; size: string } | null; result: TenderParseResult | null; items: WorkItem[]; job?: TenderJob | null };
+type Bundle = { doc: { filename: string; version: string; size: string } | null; result: TenderParseResult | null; items: WorkItem[]; job?: TenderJob | null; canReview?: boolean };
 const STEPS: [TenderProgress['stage'], string, string][] = [['extract', '文件抽取', '读取正文 / 规范 / 修订 / 澄清 / 报价表 / 图纸'], ['judge', '条款判断', '配置了模型时逐批判断，否则按规则打标'], ['summary', '生成拆标分解条目', '按类别 + 文件合并，写回投标']];
 const POLL_MS = 1500;
 const STATUS: Record<string, string> = { pending: '待开始', in_progress: '进行中', done: '已完成', blocked: '阻塞' };
@@ -84,7 +84,7 @@ function Parsing({ name, progress }: { name: string; progress?: TenderProgress }
   );
 }
 
-function WorkItems({ items, result }: { items: WorkItem[]; result: TenderParseResult }) {
+function WorkItems({ items, result, onReview }: { items: WorkItem[]; result: TenderParseResult; onReview?: ReviewFn }) {
   const [open, setOpen] = useState<string | null>(null);
   const [req, setReq] = useState<string | null>(null);
   const byId = useMemo(() => new Map(result.items.map(i => [i.id, i])), [result]);
@@ -112,7 +112,7 @@ function WorkItems({ items, result }: { items: WorkItem[]; result: TenderParseRe
                   <div className="p9-req-box">
                     <table className="tp-table tp-decomp">
                       <thead><tr><th>编号</th><th>类别</th><th>要求</th><th>强度</th><th>风险</th><th>出处</th><th>负责 / 复核</th><th>截止</th></tr></thead>
-                      <tbody>{reqs.map(it => <DecompRow key={it.id} it={it} open={req === it.id} toggle={() => setReq(req === it.id ? null : it.id)} />)}</tbody>
+                      <tbody>{reqs.map(it => <DecompRow key={it.id} it={it} open={req === it.id} toggle={() => setReq(req === it.id ? null : it.id)} onReview={onReview} />)}</tbody>
                     </table>
                   </div>
                 )}
@@ -129,7 +129,8 @@ export function LiveDocs() {
   const { api, bid, notify, setTab, setPlan, today } = useP9();
   const [data, setData] = useState<Bundle | null>(null);
   const [job, setJob] = useState<TenderJob | null>(null);
-  const [view, setView] = useState<'items' | 'reqs'>('items');
+  const [view, setView] = useState<'items' | 'reqs' | 'excluded'>('items');
+  const [excluded, setExcluded] = useState<ExcludedClause[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [uploading, setUploading] = useState('');
   const reupload = useRef<HTMLInputElement>(null);
@@ -157,6 +158,20 @@ export function LiveDocs() {
     return () => { alive = false; window.clearTimeout(timer); };
   }, [jobId, base]);
 
+  const runId = data?.result?.id;
+  useEffect(() => {
+    if (view !== 'excluded' || !runId) return;
+    void api(base + '/tender/excluded').then(setExcluded).catch((e: Error) => notify('读取已排除条款失败：' + e.message));
+  }, [view, runId, base]);
+  const review: ReviewFn = async (key, body) => {
+    try {
+      const b: Bundle = await api(`${base}/tender/clauses/${key}`, { method: 'PATCH', body });
+      setData(b);
+      if (view === 'excluded') setExcluded(await api(base + '/tender/excluded'));
+      void api(base + '/plan').then((p: { items?: Record<string, unknown>[] }) => { if (p?.items?.length) setPlan(mapPlan(p.items, today)); }).catch(() => undefined);
+      notify(body.isRequirement ? '已保存复核结果' : '已排除，可以在「已排除」里捞回');
+    } catch (e) { notify('保存失败：' + (e as Error).message); }
+  };
   async function parseSample(s: Sample) {
     try { setJob(await api(base + '/tender/parse', { method: 'POST', body: { sample: s.id } })); }
     catch (e) { notify('解析失败：' + (e as Error).message); }
@@ -182,6 +197,7 @@ export function LiveDocs() {
   if (!data.result) return <Empty onSample={parseSample} onUpload={upload} />;
   const r = data.result;
   const s = r.stats;
+  const onReview = data.canReview ? review : undefined;
   return (
     <div className="p9-docs-live">
       <section className="p9-card">
@@ -214,10 +230,13 @@ export function LiveDocs() {
             <div className="tp-seg">
               <button type="button" className={view === 'items' ? 'on' : ''} onClick={() => setView('items')}>按条目</button>
               <button type="button" className={view === 'reqs' ? 'on' : ''} onClick={() => setView('reqs')}>按要求（{s.items}）</button>
+              <button type="button" className={view === 'excluded' ? 'on' : ''} onClick={() => setView('excluded')}>已排除（{r.judge?.excluded ?? 0}）</button>
             </div>
           </div>
         </header>
-        {view === 'items' ? <WorkItems items={data.items} result={r} /> : <DecompCard r={r} />}
+        {view === 'items' && <WorkItems items={data.items} result={r} onReview={onReview} />}
+        {view === 'reqs' && <DecompCard r={r} onReview={onReview} />}
+        {view === 'excluded' && <ExcludedCard rows={excluded} onReview={onReview} />}
         <footer className="p9-card-foot"><span>{TENDER_CATEGORIES.map(c => `${CAT_LABEL[c.key]} ${s.byCategory[c.key]}`).join(' · ')}</span></footer>
       </section>
     </div>
