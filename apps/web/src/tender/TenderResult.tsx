@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, FileText, GitBranch, ListChecks, RotateCcw, Search } from "lucide-react";
-import type { DecompItem, FieldSummary, FileRole, Severity, Strength, TenderCategory, TenderParseResult } from "../../../../packages/contracts/tender";
+import { AlertTriangle, ChevronDown, ChevronRight, FileText, GitBranch, ListChecks, RotateCcw, Search, Sparkles } from "lucide-react";
+import type { DecompItem, FieldSummary, FileRole, JudgeSource, Severity, Strength, TenderCategory, TenderParseResult } from "../../../../packages/contracts/tender";
 import { TENDER_CATEGORIES } from "../../../../packages/contracts/tender";
 import "./tender.css";
 
@@ -17,6 +17,21 @@ export const FIELD_STATUS: Record<FieldSummary['status'], [string, string]> = {
   single: ['单一来源', 'gray'], consistent: ['多处一致', 'green'], overridden: ['已被修订', 'blue'], conflict: ['待核对', 'orange'],
 };
 export const fmtSize = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+export const SOURCE_LABEL: Record<JudgeSource, string> = { model: '模型', rule: '规则', mock: '测试判断' };
+
+/** 说清这次结果是谁判的：模型判了多少、排除多少、要人看多少；没过模型的明确写出来。 */
+export function JudgeNote({ r }: { r: TenderParseResult }) {
+  const j = r.judge;
+  if (!j || j.mode === 'rule') return <div className="tp-alert orange"><AlertTriangle size={13} /><div>本次结果未经模型复核，类别和强度只来自关键词规则。配置模型后重新解析即可启用模型判断。</div></div>;
+  return (
+    <div className="tp-alert blue"><Sparkles size={13} /><div>
+      {SOURCE_LABEL[j.mode]}{j.model ? `（${j.model}）` : ''}判断了 {j.candidates} 条候选，排除 {j.excluded} 条非要求，<b>{j.needsReview} 条待确认</b>。
+      {j.cached > 0 && ` ${j.cached} 条沿用之前的判断。`}
+      {j.unverified > 0 && ` ${j.unverified} 条模型未复核，用的是规则结果。`}
+      {j.failedBatches > 0 && ` ${j.failedBatches} 批调用失败。`}
+    </div></div>
+  );
+}
 
 export const Kpi = ({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) => (
   <div className="tp-kpi"><span>{label}</span><b className={tone ? 'tone-' + tone : ''}>{value}</b></div>
@@ -100,15 +115,15 @@ export function OverridesCard({ r }: { r: TenderParseResult }) {
 
 export function DecompCard({ r }: { r: TenderParseResult }) {
   const [cat, setCat] = useState<TenderCategory | 'all'>('all');
-  const [only, setOnly] = useState<'all' | 'strong' | 'risk' | 'amended'>('all');
+  const [only, setOnly] = useState<'all' | 'strong' | 'risk' | 'amended' | 'review'>('all');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => { setPage(0); }, [cat, only, q, r.id]);
   const rows = useMemo(() => r.items.filter((it) =>
     (cat === 'all' || it.category === cat)
-    && (only === 'all' || (only === 'strong' && (it.strength === 'mandatory' || it.strength === 'prohibited')) || (only === 'risk' && it.risks.length > 0) || (only === 'amended' && it.amended))
-    && (!q || (it.text + it.fileName + it.section).toLowerCase().includes(q.toLowerCase()))), [r, cat, only, q]);
+    && (only === 'all' || (only === 'strong' && (it.strength === 'mandatory' || it.strength === 'prohibited')) || (only === 'risk' && it.risks.length > 0) || (only === 'amended' && it.amended) || (only === 'review' && it.needsReview))
+    && (!q || (it.text + (it.summary || '') + it.fileName + it.section).toLowerCase().includes(q.toLowerCase()))), [r, cat, only, q]);
   const PAGE = 40;
   const pages = Math.max(1, Math.ceil(rows.length / PAGE));
   const shown = rows.slice(page * PAGE, page * PAGE + PAGE);
@@ -121,9 +136,9 @@ export function DecompCard({ r }: { r: TenderParseResult }) {
           {TENDER_CATEGORIES.map((c) => <button key={c.key} className={cat === c.key ? 'on' : ''} onClick={() => setCat(c.key)}><i className={'tp-dot c-' + c.key} />{c.label} {r.stats.byCategory[c.key]}</button>)}
         </div>
         <select value={only} onChange={(e) => setOnly(e.target.value as typeof only)}>
-          <option value="all">全部要求</option><option value="strong">只看强制 / 否决</option><option value="risk">只看有风险</option><option value="amended">只看被修订章节</option>
+          <option value="all">全部要求</option><option value="strong">只看强制 / 否决</option><option value="risk">只看有风险</option><option value="amended">只看被修订章节</option><option value="review">只看待确认</option>
         </select>
-        <label className="tp-search"><Search size={13} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜条款原文、文件、章节" /></label>
+        <label className="tp-search"><Search size={13} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜条款原文、摘要、文件、章节" /></label>
       </div>
       <table className="tp-table tp-decomp">
         <thead><tr><th>编号</th><th>类别</th><th>要求</th><th>强度</th><th>风险</th><th>出处</th><th>负责 / 复核</th><th>截止</th></tr></thead>
@@ -152,7 +167,8 @@ export function DecompRow({ it, open, toggle }: { it: DecompItem; open: boolean;
         <td className="tp-req">
           {it.amended && <span className="tp-pill blue">已修订</span>}
           {it.fileRole === 'clarification' && <span className="tp-pill purple">澄清</span>}
-          {it.title}
+          {it.needsReview && <span className="tp-pill orange" title={it.reviewReasons?.join('；')}>待确认</span>}
+          {it.summary || it.title}
         </td>
         <td>{it.strength ? <span className={'tp-pill ' + (it.strength === 'prohibited' ? 'red' : it.strength === 'mandatory' ? 'dark' : 'gray')}>{STRENGTH_LABEL[it.strength]}</span> : <span className="tp-muted">–</span>}</td>
         <td>{top ? <span className={'tp-pill sev-' + top}>{SEV_LABEL[top]} · {it.risks.length}</span> : <span className="tp-muted">–</span>}</td>
@@ -163,8 +179,16 @@ export function DecompRow({ it, open, toggle }: { it: DecompItem; open: boolean;
       {open && (
         <tr className="tp-detail"><td /><td colSpan={7}>
           <p>{it.text}</p>
+          {!!it.reviewReasons?.length && <div className="tp-review"><AlertTriangle size={12} /><b>待确认</b>{it.reviewReasons.join('；')}</div>}
+          {it.quote && <div className="tp-evidence"><b>依据原文</b>{it.quote}</div>}
+          {it.reason && <div className="tp-evidence"><b>判断理由</b>{it.reason}</div>}
           {it.risks.map((x) => <div key={x.label} className={'tp-risk sev-' + x.severity}><AlertTriangle size={12} /><b>{x.label}</b>{x.advice}</div>)}
-          <div className="tp-muted tp-small">分类得分 {it.score} · 来源文件角色：{ROLE_LABEL[it.fileRole]}</div>
+          <div className="tp-muted tp-small">
+            结论来源：{SOURCE_LABEL[it.source || 'rule']}{it.confidence !== undefined ? ` · 置信度 ${it.confidence}` : ''}
+            {it.source !== 'rule' && it.ruleCategory && it.ruleCategory !== it.category ? ` · 规则判为${CAT_LABEL[it.ruleCategory]}` : ''}
+            {it.source !== 'rule' && it.ruleStrength && it.ruleStrength !== it.strength ? ` · 规则判为${STRENGTH_LABEL[it.ruleStrength]}` : ''}
+            {' '}· 分类得分 {it.score} · 来源文件角色：{ROLE_LABEL[it.fileRole]}
+          </div>
         </td></tr>
       )}
     </>
@@ -173,9 +197,9 @@ export function DecompRow({ it, open, toggle }: { it: DecompItem; open: boolean;
 
 export function exportCsv(r: TenderParseResult) {
   const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const head = ['编号', '类别', '要求', '原文', '强度', '风险', '处理建议', '文件', '文件角色', '章节', '页', '负责', '复核', '截止', '已修订'];
+  const head = ['编号', '类别', '要求', '原文', '判断依据', '待确认', '结论来源', '强度', '风险', '处理建议', '文件', '文件角色', '章节', '页', '负责', '复核', '截止', '已修订'];
   const lines = r.items.map((it) => [
-    it.id, CAT_LABEL[it.category], it.title, it.text, it.strength ? STRENGTH_LABEL[it.strength] : '',
+    it.id, CAT_LABEL[it.category], it.summary || it.title, it.text, it.quote || '', it.reviewReasons?.join('；') || '', SOURCE_LABEL[it.source || 'rule'], it.strength ? STRENGTH_LABEL[it.strength] : '',
     it.risks.map((x) => `${SEV_LABEL[x.severity]}·${x.label}`).join('；'), it.risks.map((x) => x.advice).join('；'),
     it.fileName, ROLE_LABEL[it.fileRole], it.section, it.page, it.owner, it.reviewer, it.dueDate || '', it.amended ? '是' : '',
   ].map(esc).join(','));

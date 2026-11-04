@@ -10,8 +10,8 @@ import { allocateBidNumber, canViewQuote, childById, children, collections, load
 import { allowedRecord, canAccess } from '../crm.ts';
 import { allRecords, record } from '../db.ts';
 import { TENDER_CATEGORIES } from '../../../../packages/contracts/tender.ts';
-import type { DecompItem, TenderCategory } from '../../../../packages/contracts/tender.ts';
-import { getRun, parseSample, parseUpload } from '../tender/service.ts';
+import type { DecompItem, TenderCategory, TenderProgress } from '../../../../packages/contracts/tender.ts';
+import { getRun, parseSample, parseUpload, runningJobForBid, startJob } from '../tender/service.ts';
 import type { SourceFile } from '../tender/extract.ts';
 
 /** 业务时钟日期（db.now() 的日期部分，仓库约定；绝不硬编码 2026-10-24，演示时钟由 BUSINESS_CLOCK 控制）。 */
@@ -689,9 +689,9 @@ export function aiCheck(user: User, id: string) {
  * 同一类别同一文件的条目按 tenderKey 覆盖更新（仅限未开始的），重传新版不会重复生成。
  */
 const TENDER_CAT_LABEL: Record<TenderCategory, string> = Object.fromEntries(TENDER_CATEGORIES.map((c) => [c.key, c.label])) as Record<TenderCategory, string>;
-export async function parseTenderForBid(user: User, bidId: string, input: { sample?: string; upload?: { name: string; files: SourceFile[] } }) {
+export async function parseTenderForBid(user: User, bidId: string, input: { sample?: string; upload?: { name: string; files: SourceFile[] } }, onProgress?: (p: TenderProgress) => void) {
   const bid = loadBid(user, bidId);
-  const result = input.sample ? await parseSample(user.name, input.sample) : await parseUpload(user.name, input.upload?.name || '', input.upload?.files || []);
+  const result = input.sample ? await parseSample(user.name, input.sample, onProgress) : await parseUpload(user.name, input.upload?.name || '', input.upload?.files || [], onProgress);
   const doc: BidDoc = {
     ...childBase(bid, newId('DOC'), 'bid_doc', result.packageName), filename: result.packageName,
     category: '招标文件原件', version: 'v' + (children<BidDoc>(bid.id, 'bid_doc').filter((d) => d.tenderRunId).length + 1),
@@ -710,8 +710,9 @@ export async function parseTenderForBid(user: User, bidId: string, input: { samp
   const out: BidItem[] = [];
   for (const [key, its] of groups) {
     const first = its[0];
-    const mandatory = its.filter((i) => i.strength).length;
+    const mandatory = its.filter((i) => i.strength === 'mandatory' || i.strength === 'prohibited').length;
     const risky = its.filter((i) => i.risks.length).length;
+    const reviewCount = its.filter((i) => i.needsReview).length;
     const dues = its.map((i) => i.dueDate).filter(Boolean).sort() as string[];
     const fields = {
       title: `${TENDER_CAT_LABEL[first.category]} · ${first.fileName.replace(/\.[^.]+$/, '')}`,
@@ -719,7 +720,7 @@ export async function parseTenderForBid(user: User, bidId: string, input: { samp
       sourceClause: `${first.fileName} · ${its.length} 条要求${mandatory ? ` · 强制 ${mandatory}` : ''}${risky ? ` · 风险 ${risky}` : ''}`,
       assigneeRole: first.owner, reviewerRole: first.reviewer, end: dues[0] || fallbackEnd,
       tenderKey: key, tenderRunId: result.id, requirementIds: its.map((i) => i.id),
-      requirementCount: its.length, mandatoryCount: mandatory, riskCount: risky, amended: its.some((i) => i.amended),
+      requirementCount: its.length, mandatoryCount: mandatory, riskCount: risky, reviewCount, amended: its.some((i) => i.amended),
     };
     const prev = existing.get(key);
     if (prev && prev.status !== 'pending') continue;
@@ -732,13 +733,21 @@ export async function parseTenderForBid(user: User, bidId: string, input: { samp
   if (['idle', 'planning', 'plan_draft', 'decomposing'].includes(next.aiPipeline)) next = saveBid({ ...next, aiPipeline: 'decomposing', aiLastError: null });
   return { doc, result, items: out, pipeline: next.aiPipeline };
 }
-/** 投标最近一次招标文件解析：文档 + 解析结果 + 由它生成的分解条目；没有则 result 为 null。 */
+/** 后台跑解析：立即返回任务，前端轮询 /tender/jobs/:id。同一个投标同时只跑一个。 */
+export function startTenderJobForBid(user: User, bidId: string, input: { sample?: string; upload?: { name: string; files: SourceFile[] } }) {
+  loadBid(user, bidId);
+  if (runningJobForBid(bidId)) throw new AppError('CONFLICT', '这个投标正在解析，请等当前解析完成', 409);
+  const name = input.upload?.name || input.sample?.split('/').pop() || '招标文件';
+  return startJob(user.name, name, bidId, async (onProgress) => ({ runId: (await parseTenderForBid(user, bidId, input, onProgress)).result.id }));
+}
+/** 投标最近一次招标文件解析：文档 + 解析结果 + 由它生成的分解条目；没有则 result 为 null。job 是正在跑的解析任务。 */
 export function tenderForBid(user: User, bidId: string) {
   loadBid(user, bidId);
+  const job = runningJobForBid(bidId) || null;
   // 业务时钟可能固定，createdAt 会相同，按版本号取最新
   const ver = (d: BidDoc) => Number(String(d.version).replace(/\D/g, '')) || 0;
   const doc = children<BidDoc>(bidId, 'bid_doc').filter((d) => d.tenderRunId).sort((a, b) => ver(b) - ver(a))[0];
-  if (!doc) return { doc: null, result: null, items: [] };
+  if (!doc) return { doc: null, result: null, items: [], job };
   const items = children<BidItem>(bidId, 'bid_item').filter((x) => x.tenderKey);
-  return { doc, result: getRun(String(doc.tenderRunId)), items };
+  return { doc, result: getRun(String(doc.tenderRunId)), items, job };
 }

@@ -5,7 +5,7 @@ import { AppError } from '../../../../packages/contracts/index.ts';
 import type { User } from '../../../../packages/contracts/index.ts';
 import { getRules, resetRules, restoreRules, ruleHistory, ruleSetSchema, saveRules } from './rules.ts';
 import { previewText } from './pipeline.ts';
-import { getRun, listRuns, listSamples, parseSample, parseUpload } from './service.ts';
+import { getJob, getRun, listRuns, listSamples, parseSample, parseUpload } from './service.ts';
 import type { TenderRuleSet } from '../../../../packages/contracts/tender.ts';
 
 /**
@@ -48,6 +48,7 @@ r.post('/tender/upload', upload.array('files', 60), async (req, res) => {
   });
   res.json(await parseUpload(user(res).name, String((req.body as { name?: string }).name || ''), files));
 });
+r.get('/tender/jobs/:id', (req, res) => res.json(getJob(req.params.id)));
 r.get('/tender/runs', (_req, res) => res.json(listRuns()));
 r.get('/tender/runs/:id', (req, res) => res.json(getRun(req.params.id)));
 

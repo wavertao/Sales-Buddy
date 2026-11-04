@@ -1,19 +1,22 @@
 import { now, uid } from '../db.ts';
 import type {
-  DecompItem, FieldHit, FieldSummary, FileRole, OverrideLink, ParsedFile, RulePreviewClause, Severity, Strength,
-  TenderCategory, TenderParseResult, TenderRuleSet, TeamRole,
+  DecompItem, ExcludedClause, FieldHit, FieldSummary, FileRole, JudgeSummary, OverrideLink, ParsedFile, RulePreviewClause, Severity, Strength,
+  TenderCategory, TenderParseResult, TenderProgress, TenderRuleSet, TeamRole,
 } from '../../../../packages/contracts/tender.ts';
 import { TENDER_CATEGORIES } from '../../../../packages/contracts/tender.ts';
 import { extractFile, type Extracted, type SourceFile } from './extract.ts';
+import { clauseKey, type Candidate, type JudgeOutcome, type JudgeRunner } from './judge.ts';
+import { mergeVerdict, type Merged } from './merge.ts';
 
 /**
- * 标书解析流水线（纯规则，可复现）：
+ * 标书解析流水线（不传 judge 时是纯规则，可复现）：
  *   1 抽取：extract.ts 把每个文件变成按页文本
  *   2 文件角色：文件名正则 + 前两页关键词打分，决定效力顺序和是否拆条款
  *   3 章节切分：标题正则把正文切成章节，再按列表项 / 句末把章节切成条款
  *   4 条款打标：五类分类得分、强制项强度、风险命中
  *   5 包级汇总：关键字段（多文件取值对比 → 采用值 / 被修订 / 矛盾）、修订与澄清对原条款的引用、拆标分解表（责任角色 + 倒排截止）
  * 规则全部来自 TenderRuleSet，本文件不写死业务口径。
+ * 传了 judge 时第 4 步多一道：规则放宽筛出候选，模型逐批判断，merge.ts 决定采纳谁的结论。
  */
 
 const MAX_ITEMS = 1500;
@@ -288,15 +291,21 @@ const addDays = (iso: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-export async function parsePackage(rules: TenderRuleSet, packageName: string, files: SourceFile[], source: 'sample' | 'upload'): Promise<TenderParseResult> {
+export type ParseOptions = { judge?: JudgeRunner; onProgress?: (p: TenderProgress) => void; onExcluded?: (runId: string, excluded: ExcludedClause[]) => void };
+
+export async function parsePackage(rules: TenderRuleSet, packageName: string, files: SourceFile[], source: 'sample' | 'upload', opts: ParseOptions = {}): Promise<TenderParseResult> {
   const t0 = Date.now();
+  const progress = opts.onProgress || (() => undefined);
   const c = compile(rules);
   const { maxPagesPerFile, minCharsPerPage, minCategoryScore } = rules.options;
   const warnings: string[] = [];
 
   // 1 抽取
   const extracted: Extracted[] = [];
-  for (const f of files) extracted.push(...(await extractFile(f, maxPagesPerFile, minCharsPerPage)));
+  for (const [i, f] of files.entries()) {
+    progress({ stage: 'extract', done: i, total: files.length, message: `抽取 ${f.name}` });
+    extracted.push(...(await extractFile(f, maxPagesPerFile, minCharsPerPage)));
+  }
 
   // 2 角色 + 3 切分
   type Work = { file: ParsedFile; ex: Extracted; extract: boolean; clauses: Clause[]; sections: Section[] };
@@ -337,27 +346,47 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
   const deadline = fields.find((f) => f.key === 'deadline');
   const deadlineIso = deadline && /^\d{4}-\d{2}-\d{2}$/.test(deadline.values.find((v) => v.value === deadline.value)?.normalized || '')
     ? deadline.values.find((v) => v.value === deadline.value)!.normalized : undefined;
+  const rows = work.flatMap((w) => w.clauses.map((cl) => {
+    const tag = tagClause(c, cl.text, cl.section.title);
+    const strong = tag.strength === 'mandatory' || tag.strength === 'prohibited' || tag.strength === 'required';
+    const keep = tag.risks.length > 0 || (strong && tag.score >= minCategoryScore) || (w.file.role === 'clarification' && tag.score >= minCategoryScore);
+    return { w, cl, tag, keep, clauseKey: clauseKey(cl.text), ruleRisks: tag.risks.map((r) => ({ label: r.label, severity: r.severity, advice: r.advice })) };
+  }));
+  // 候选比规则的进表条件宽得多：有任何信号就交给模型，规则不再替人把条款删掉
+  const candidates: Candidate[] = opts.judge ? rows.filter((r) => r.tag.strength || r.tag.risks.length || r.tag.score > 0).map((r) => ({
+    key: r.clauseKey, text: r.cl.text.slice(0, CLAUSE_TEXT_CAP), section: r.cl.section.title, fileName: r.w.file.name, fileRole: r.w.file.role,
+    hint: { category: r.tag.category, strength: r.tag.strength, risks: r.tag.risks.map((x) => x.label) },
+  })) : [];
+  const outcome: JudgeOutcome | undefined = opts.judge && candidates.length ? await opts.judge(candidates, rules.judge, progress) : undefined;
+  progress({ stage: 'summary', done: 0, total: 1, message: '生成拆标分解表' });
+
   const seen = new Set<string>();
+  const excluded: ExcludedClause[] = [];
   let items: DecompItem[] = [];
-  for (const w of work) {
-    for (const cl of w.clauses) {
-      const tag = tagClause(c, cl.text, cl.section.title);
-      const strong = tag.strength === 'mandatory' || tag.strength === 'prohibited' || tag.strength === 'required';
-      const keep = tag.risks.length > 0 || (strong && tag.score >= minCategoryScore) || (w.file.role === 'clarification' && tag.score >= minCategoryScore);
-      if (!keep || !tag.category) continue;
-      const key = cl.text.slice(0, 140).toLowerCase().replace(/[^a-z0-9一-龥]/g, '');
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const owner = c.owners.get(tag.category);
-      items.push({
-        id: '', no: 0, category: tag.category, title: titleOf(cl.text), text: cl.text.slice(0, CLAUSE_TEXT_CAP),
-        strength: tag.strength, risks: tag.risks.map((r) => ({ label: r.label, severity: r.severity, advice: r.advice })),
-        fileId: w.file.id, fileName: w.file.name, fileRole: w.file.role, section: cl.section.title, page: cl.page,
-        owner: (owner?.role || 'SLS') as TeamRole, reviewer: (owner?.reviewer || 'BSD') as TeamRole,
-        dueDate: deadlineIso && owner ? addDays(deadlineIso, owner.dueOffsetDays) : undefined,
-        score: tag.score, amended: amendedSections.has(`${w.file.name}::${cl.section.title}`),
-      });
+  for (const { w, cl, tag, keep, clauseKey: key, ruleRisks } of rows) {
+    const m: Merged = outcome
+      ? mergeVerdict({ keep, category: tag.category, strength: tag.strength, risks: ruleRisks }, outcome.verdicts.get(key), rules.judge.minConfidence, outcome.source)
+      : { include: keep, category: tag.category, strength: tag.strength, risks: ruleRisks, source: 'rule', needsReview: false, reviewReasons: [] };
+    if (!m.include) {
+      if (m.excludedBecause) excluded.push({ clauseKey: key, text: cl.text.slice(0, CLAUSE_TEXT_CAP), fileName: w.file.name, section: cl.section.title, page: cl.page, reason: m.excludedBecause });
+      continue;
     }
+    if (!m.category) continue;
+    const dedupe = cl.text.slice(0, 140).toLowerCase().replace(/[^a-z0-9一-龥]/g, '');
+    if (seen.has(dedupe)) continue;
+    seen.add(dedupe);
+    const owner = c.owners.get(m.category);
+    items.push({
+      id: '', no: 0, category: m.category, title: titleOf(cl.text), text: cl.text.slice(0, CLAUSE_TEXT_CAP),
+      strength: m.strength, risks: m.risks,
+      fileId: w.file.id, fileName: w.file.name, fileRole: w.file.role, section: cl.section.title, page: cl.page,
+      owner: (owner?.role || 'SLS') as TeamRole, reviewer: (owner?.reviewer || 'BSD') as TeamRole,
+      dueDate: deadlineIso && owner ? addDays(deadlineIso, owner.dueOffsetDays) : undefined,
+      score: tag.score, amended: amendedSections.has(`${w.file.name}::${cl.section.title}`),
+      clauseKey: key, source: m.source, summary: m.summary, quote: m.quote, reason: m.reason, confidence: m.confidence,
+      needsReview: m.needsReview || undefined, reviewReasons: m.reviewReasons.length ? m.reviewReasons : undefined,
+      ruleCategory: tag.category, ruleStrength: tag.strength,
+    });
   }
   const truncated = items.length > MAX_ITEMS;
   if (truncated) {
@@ -379,8 +408,15 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
   const byCategory = Object.fromEntries(TENDER_CATEGORIES.map((k) => [k.key, items.filter((i) => i.category === k.key).length])) as Record<TenderCategory, number>;
   const risks = { high: 0, medium: 0, low: 0 } as Record<Severity, number>;
   for (const it of items) for (const r of it.risks) risks[r.severity]++;
+  const judge: JudgeSummary = outcome ? {
+    mode: outcome.source, model: outcome.model, candidates: new Set(candidates.map((x) => x.key)).size, batches: outcome.batches, failedBatches: outcome.failedBatches,
+    cached: outcome.cached, unverified: items.filter((i) => i.source === 'rule').length, excluded: excluded.length, needsReview: items.filter((i) => i.needsReview).length, note: outcome.note,
+  } : { mode: 'rule', candidates: 0, batches: 0, failedBatches: 0, cached: 0, unverified: items.length, excluded: 0, needsReview: 0 };
+  if (outcome?.note) warnings.push(outcome.note);
+  const id = uid('tender');
+  if (excluded.length) opts.onExcluded?.(id, excluded);
   return {
-    id: uid('tender'), packageName, source, createdAt: now(), durationMs: Date.now() - t0, ruleVersion: rules.version,
+    id, packageName, source, createdAt: now(), durationMs: Date.now() - t0, ruleVersion: rules.version, judge,
     files: parsed, fields, overrides, items,
     stats: {
       files: parsed.length, pages: parsed.reduce((s, f) => s + f.pages, 0),

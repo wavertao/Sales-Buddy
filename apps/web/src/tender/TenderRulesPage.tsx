@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, Check, ChevronDown, ChevronRight, FlaskConical, History, Loader2, Plus, RotateCcw, Save, Settings2, Trash2, X,
 } from "lucide-react";
-import type { FileRole, RulePreviewClause, Severity, Strength, TenderCategory, TenderRuleSet } from "../../../../packages/contracts/tender";
+import type { FileRole, JudgeConfig, RulePreviewClause, Severity, Strength, TenderCategory, TenderRuleSet } from "../../../../packages/contracts/tender";
 import { TENDER_CATEGORIES } from "../../../../packages/contracts/tender";
 import { CAT_LABEL, ROLE_LABEL, SEV_LABEL, STRENGTH_LABEL } from "./TenderResult";
 import "./tender.css";
@@ -25,8 +25,9 @@ export function TenderRulesPage({ api }: { api: Api }) {
 }
 
 // ======================= 规则配置 =======================
-type GroupKey = 'fileRoles' | 'headings' | 'categories' | 'mandatory' | 'fields' | 'risks' | 'owners' | 'options';
+type GroupKey = 'judge' | 'fileRoles' | 'headings' | 'categories' | 'mandatory' | 'fields' | 'risks' | 'owners' | 'options';
 const GROUPS: { key: GroupKey; label: string; step: string; hint: string }[] = [
+  { key: 'judge', label: '模型判断', step: '第 4 步', hint: '配置了模型时，规则只负责找候选和给提示，类别、强度、风险由模型判断，每条结论必须引用原文。规则判为否决或高风险的不会被模型单方面去掉，分歧会标「待确认」。这里的提示词、公司口径和示例和规则同一个版本，保存、回滚都在一起。' },
   { key: 'fileRoles', label: '文件角色识别', step: '第 2 步', hint: '文件名正则命中 +3 分、前两页关键词命中 +1 分，取最高分的角色。效力顺序决定同一字段多文件取值时以谁为准；「拆条款」关掉的角色只登记不拆。' },
   { key: 'headings', label: '章节标题', step: '第 3 步', hint: '一行文字（≤120 字）命中任一正则就当作章节标题，后面的条款都挂在这个章节下。修订文件里引用的条款号也靠这里切出来的章节编号来定位。' },
   { key: 'categories', label: '拆标分类', step: '第 4 步', hint: '条款原文每命中一个关键词 +1（同一词最多计 3 次），所在章节标题命中再 +1，乘以权重后取得分最高的类别。英文关键词自动加左词界，支持 non-?compliance 这类正则简写。' },
@@ -46,7 +47,7 @@ function RuleConfig({ api }: { api: Api }) {
   const [saved, setSaved] = useState<TenderRuleSet | null>(null);
   const [draft, setDraft] = useState<TenderRuleSet | null>(null);
   const [canEdit, setCanEdit] = useState(false);
-  const [group, setGroup] = useState<GroupKey>('fileRoles');
+  const [group, setGroup] = useState<GroupKey>('judge');
   const [msg, setMsg] = useState<{ tone: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<{ version: number; updatedAt: string; updatedBy: string }[] | null>(null);
@@ -81,7 +82,7 @@ function RuleConfig({ api }: { api: Api }) {
     catch (e) { flash('red', (e as Error).message); } finally { setBusy(false); }
   }
   const g = GROUPS.find((x) => x.key === group)!;
-  const count = (k: GroupKey) => (k === 'options' ? 5 : (draft[k] as unknown[]).length);
+  const count = (k: GroupKey) => (k === 'options' ? 5 : k === 'judge' ? draft.judge.examples.length : (draft[k] as unknown[]).length);
 
   return (
     <div className="tp-rules">
@@ -123,6 +124,7 @@ function RuleConfig({ api }: { api: Api }) {
           <div className="tp-card-head"><b>{g.label}</b><span className="tp-muted">{g.step}</span></div>
           <p className="tp-hint">{g.hint}</p>
           <fieldset disabled={!canEdit} className="tp-fieldset">
+            {group === 'judge' && <JudgeForm value={draft.judge} onChange={(v) => set('judge', v)} />}
             {group === 'fileRoles' && (
               <RuleList items={draft.fileRoles} onChange={(v) => set('fileRoles', v)} add={() => ({ id: newId('fr'), role: 'other' as FileRole, label: '新角色', namePatterns: [], contentKeywords: [], precedence: 30, extractClauses: true, enabled: true })}
                 render={(r, up) => (<>
@@ -212,8 +214,34 @@ function RuleConfig({ api }: { api: Api }) {
   );
 }
 
-function RuleList<T extends { id: string; enabled: boolean }>({ items, onChange, add, render }: {
-  items: T[]; onChange: (v: T[]) => void; add: () => T; render: (r: T, up: (p: Partial<T>) => void) => React.ReactNode;
+function JudgeForm({ value, onChange }: { value: JudgeConfig; onChange: (v: JudgeConfig) => void }) {
+  const up = (p: Partial<JudgeConfig>) => onChange({ ...value, ...p });
+  return (
+    <div className="tp-judge">
+      <label className="tp-check"><input type="checkbox" checked={value.enabled} onChange={(e) => up({ enabled: e.target.checked })} />启用模型判断（没配模型时自动用规则结果）</label>
+      <Row label="提示词" wide><textarea className="tp-judge-text" value={value.prompt} onChange={(e) => up({ prompt: e.target.value })} /></Row>
+      <Row label="公司口径（每行一条）" wide>
+        <textarea className="tp-judge-text short" value={value.policies.join('\n')} placeholder="例如：质保超过 10 年算高风险" onChange={(e) => up({ policies: e.target.value.split('\n') })} onBlur={() => up({ policies: value.policies.map((p) => p.trim()).filter(Boolean) })} />
+      </Row>
+      <div className="tp-options">
+        <Row label="每批条款数"><input type="number" min={1} max={100} value={value.batchSize} onChange={(e) => up({ batchSize: Number(e.target.value) })} className="tp-narrow" /></Row>
+        <Row label="同时调用批数"><input type="number" min={1} max={20} value={value.concurrency} onChange={(e) => up({ concurrency: Number(e.target.value) })} className="tp-narrow" /></Row>
+        <Row label="低于此置信度标待确认"><input type="number" step={0.05} min={0} max={1} value={value.minConfidence} onChange={(e) => up({ minConfidence: Number(e.target.value) })} className="tp-narrow" /></Row>
+      </div>
+      <b>标注示例 · {value.examples.length}</b>
+      <RuleList items={value.examples} onChange={(v) => up({ examples: v })} add={() => ({ id: newId('ex'), text: '', isRequirement: true, category: 'technical' as TenderCategory, strength: 'required' as Strength, enabled: true })} addLabel="新增示例"
+        render={(r, set1) => (<>
+          <Row label="条款原文" wide><textarea className="tp-judge-text short" value={r.text} onChange={(e) => set1({ text: e.target.value })} /></Row>
+          <Row label="判断"><label className="tp-check"><input type="checkbox" checked={r.isRequirement} onChange={(e) => set1({ isRequirement: e.target.checked })} />属于要求</label></Row>
+          {r.isRequirement && <Row label="类别 / 强度"><select value={r.category} onChange={(e) => set1({ category: e.target.value as TenderCategory })}>{TENDER_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}</select><select value={r.strength} onChange={(e) => set1({ strength: e.target.value as Strength })}>{Object.entries(STRENGTH_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Row>}
+          <Row label="说明" wide><input value={r.note || ''} onChange={(e) => set1({ note: e.target.value || undefined })} /></Row>
+        </>)} />
+    </div>
+  );
+}
+
+function RuleList<T extends { id: string; enabled: boolean }>({ items, onChange, add, render, addLabel = '新增规则' }: {
+  items: T[]; onChange: (v: T[]) => void; add: () => T; render: (r: T, up: (p: Partial<T>) => void) => React.ReactNode; addLabel?: string;
 }) {
   return (
     <div className="tp-rule-list">
@@ -229,7 +257,7 @@ function RuleList<T extends { id: string; enabled: boolean }>({ items, onChange,
           </div>
         );
       })}
-      <button className="tp-btn tp-add" onClick={() => onChange([...items, add()])}><Plus size={13} />新增规则</button>
+      <button className="tp-btn tp-add" onClick={() => onChange([...items, add()])}><Plus size={13} />{addLabel}</button>
     </div>
   );
 }

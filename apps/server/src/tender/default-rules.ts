@@ -109,4 +109,22 @@ export const DEFAULT_RULES: Omit<TenderRuleSet, 'version' | 'updatedAt' | 'updat
     { category: 'deviation', role: 'QA', reviewer: 'BSD', dueOffsetDays: 3 },
   ],
   options: { minCharsPerPage: 40, maxPagesPerFile: 600, clauseMinLength: 24, clauseMaxLength: 700, minCategoryScore: 2 },
+  judge: {
+    enabled: true,
+    prompt: `你在帮储能（BESS）投标团队拆解招标文件，判断每条条款是不是投标方需要响应的要求。
+类别：technical 技术参数与认证；delivery 工期、交付、安装调试、运维；price 报价、税费、币种；commercial 资格、保证金、付款、合同责任；deviation 否决、废标和偏差规定。
+强度：prohibited 不满足就否决或废标；mandatory 明确必须满足的门槛（must、必须、★、不低于某数值）；required 一般义务（shall、应当）；recommended 建议项。
+定义、背景介绍、目录和格式说明不算要求。
+不要因为出现某个词就下结论，要看整句的实际约束。只做分类和拆解，不给报价决策或报价建议。`,
+    policies: [],
+    examples: [
+      { id: 'ex-reject', text: 'Bids without the earnest money deposit will be rejected as non-responsive.', isRequirement: true, category: 'commercial', strength: 'prohibited', note: '不交保证金直接废标', enabled: true },
+      { id: 'ex-must', text: 'The Bidder must submit the UL9540A test report with its technical proposal.', isRequirement: true, category: 'technical', strength: 'mandatory', enabled: true },
+      { id: 'ex-shall', text: 'The Supplier shall supply the BESS within 11 months of the effective date.', isRequirement: true, category: 'delivery', strength: 'required', enabled: true },
+      { id: 'ex-cn-reject', text: '投标报价高于最高投标限价的，作废标处理。', isRequirement: true, category: 'price', strength: 'prohibited', enabled: true },
+      { id: 'ex-cn-shall', text: '投标人应当提供近三年储能项目业绩证明材料。', isRequirement: true, category: 'commercial', strength: 'required', enabled: true },
+      { id: 'ex-def', text: '"Contract Price" means the total amount payable to the Contractor under the Contract.', isRequirement: false, note: '只是定义，不是要求', enabled: true },
+    ],
+    batchSize: 30, concurrency: 5, minConfidence: 0.6,
+  },
 };

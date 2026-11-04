@@ -73,15 +73,15 @@ r.post('/bids/:id/assistant/chat', async (req, res) => res.json(await S.assistan
 
 // ---- AI 协管主链路（§8 补充接口）----
 r.post('/bids/:id/ai/plan', async (req, res) => res.json(await S.aiPlanRoute(u(req, res), req.params.id)));
-// 招标文件解析：选样本（JSON {sample}）或上传整包（multipart files）→ 跑标书解析流水线 → 写回分解条目
+// 招标文件解析：选样本（JSON {sample}）或上传整包（multipart files）→ 后台跑标书解析流水线 → 写回分解条目；这两个接口返回任务，进度查 /tender/jobs/:id
 r.get('/bids/:id/tender', (req, res) => res.json(S.tenderForBid(u(req, res), req.params.id)));
-r.post('/bids/:id/tender/parse', async (req, res) => res.json(await S.parseTenderForBid(u(req, res), req.params.id, { sample: z.object({ sample: z.string().min(1).max(400) }).parse(req.body).sample })));
-r.post('/bids/:id/tender/upload', upload.array('files', 60), async (req, res) => {
+r.post('/bids/:id/tender/parse', (req, res) => res.json(S.startTenderJobForBid(u(req, res), req.params.id, { sample: z.object({ sample: z.string().min(1).max(400) }).parse(req.body).sample })));
+r.post('/bids/:id/tender/upload', upload.array('files', 60), (req, res) => {
   const files = ((req.files as Express.Multer.File[]) || []).map((f) => {
     const name = Buffer.from(f.originalname, 'latin1').toString('utf8');
     return { name: name.split(/[\\/]/).pop()!, path: name, bytes: new Uint8Array(f.buffer) };
   });
-  res.json(await S.parseTenderForBid(u(req, res), String(req.params.id), { upload: { name: String((req.body as { name?: string }).name || ''), files } }));
+  res.json(S.startTenderJobForBid(u(req, res), String(req.params.id), { upload: { name: String((req.body as { name?: string }).name || ''), files } }));
 });
 r.post('/bids/:id/ai/decompose', async (req, res) => res.json(await S.aiDecomposeRoute(u(req, res), req.params.id, ((req.body as { documentId?: string } | undefined)?.documentId) || undefined)));
 r.post('/bids/:id/ai/dispatch', (req, res) => res.json(S.aiDispatch(u(req, res), req.params.id)));

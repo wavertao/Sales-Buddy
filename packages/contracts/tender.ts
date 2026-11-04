@@ -51,6 +51,22 @@ export interface FieldRule {
 }
 export interface RiskRule { id: string; label: string; pattern: string; severity: Severity; category: TenderCategory; advice: string; enabled: boolean }
 export interface OwnerRule { category: TenderCategory; role: TeamRole; reviewer: TeamRole; dueOffsetDays: number }
+/** 模型判断的标注示例：模型照着这些判断同类条款。 */
+export interface JudgeExample {
+  id: string; text: string; isRequirement: boolean;
+  category?: TenderCategory; strength?: Strength; note?: string; enabled: boolean;
+}
+/** 模型判断配置：和规则同一个版本，一起保存、试跑、回滚。 */
+export interface JudgeConfig {
+  enabled: boolean;
+  prompt: string;
+  /** 公司口径，每条一句，如「质保超过 10 年算高风险」 */
+  policies: string[];
+  examples: JudgeExample[];
+  batchSize: number; concurrency: number;
+  /** 置信度低于此值的结论标待确认 */
+  minConfidence: number;
+}
 export interface TenderOptions {
   /** 每页可抽字符数低于该值视为扫描页 */
   minCharsPerPage: number;
@@ -71,6 +87,7 @@ export interface TenderRuleSet {
   risks: RiskRule[];
   owners: OwnerRule[];
   options: TenderOptions;
+  judge: JudgeConfig;
 }
 
 export type ExtractStatus = 'ok' | 'partial_scanned' | 'scanned' | 'unsupported' | 'error';
@@ -105,6 +122,27 @@ export interface DecompItem {
   owner: TeamRole; reviewer: TeamRole; dueDate?: string; score: number;
   /** 本条所在章节被修订 / 澄清文件引用过 */
   amended: boolean;
+  /** 由条款正文算出的稳定编号，重传新版后仍能对上 */
+  clauseKey?: string;
+  /** 结论来源：模型、规则，或测试用的确定性判断 */
+  source?: JudgeSource;
+  /** 模型给出的中文摘要、原文引用、理由、置信度（0–1） */
+  summary?: string; quote?: string; reason?: string; confidence?: number;
+  needsReview?: boolean; reviewReasons?: string[];
+  /** 规则原本的判断，模型改过时用来对照 */
+  ruleCategory?: TenderCategory; ruleStrength?: Strength;
+}
+export type JudgeSource = 'model' | 'rule' | 'mock';
+export interface JudgeSummary {
+  mode: JudgeSource; model?: string | null; candidates: number; batches: number; failedBatches: number;
+  cached: number; unverified: number; excluded: number; needsReview: number; note?: string;
+}
+/** 模型判定不是要求、没进分解表的条款，留着供核对和捞回。 */
+export interface ExcludedClause { clauseKey: string; text: string; fileName: string; section: string; page: number; reason: string }
+export interface TenderProgress { stage: 'extract' | 'judge' | 'summary'; done: number; total: number; message: string }
+export interface TenderJob {
+  id: string; status: 'running' | 'done' | 'failed'; bidId?: string; by: string; packageName: string;
+  progress: TenderProgress; runId?: string; error?: string; createdAt: string;
 }
 export interface TenderParseResult {
   id: string; packageName: string; source: 'sample' | 'upload'; createdAt: string; durationMs: number;
@@ -120,6 +158,8 @@ export interface TenderParseResult {
   };
   warnings: string[];
   truncated: boolean;
+  /** 旧解析记录没有这一项，视同纯规则 */
+  judge?: JudgeSummary;
 }
 
 /** 规则试跑：贴一段文字，看每条规则命中了什么。 */

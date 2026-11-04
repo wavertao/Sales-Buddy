@@ -2,17 +2,18 @@
 // 解析结果按「类别 + 文件」合并成分解条目写回投标（bid_item），点条目可展开看它包含的原始要求。
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, CircleCheck, Download, FileUp, FolderInput, FolderOpen, Globe, HardDrive, Info, Loader, Send, Upload } from 'lucide-react';
-import type { DecompItem, TenderParseResult } from '../../../../../packages/contracts/tender';
+import type { DecompItem, TenderJob, TenderParseResult, TenderProgress } from '../../../../../packages/contracts/tender';
 import { TENDER_CATEGORIES } from '../../../../../packages/contracts/tender';
-import { CAT_LABEL, DecompCard, DecompRow, FieldsCard, FilesCard, Kpi, OverridesCard, exportCsv, fmtSize } from '../../tender/TenderResult';
+import { CAT_LABEL, DecompCard, DecompRow, FieldsCard, FilesCard, JudgeNote, Kpi, OverridesCard, exportCsv, fmtSize } from '../../tender/TenderResult';
 import { mapPlan } from '../live';
 import { useP9 } from '../store';
 import { Btn, Pill, cx } from '../ui';
 
 type Sample = { id: string; name: string; kind: 'single' | 'package'; files: number; size: number };
-type WorkItem = { id: string; title: string; category: string; sourceClause: string; assigneeRole: string; reviewerRole?: string; end: string; status: string; requirementIds?: string[]; requirementCount?: number; mandatoryCount?: number; riskCount?: number; amended?: boolean };
-type Bundle = { doc: { filename: string; version: string; size: string } | null; result: TenderParseResult | null; items: WorkItem[] };
-const STEPS: [string, string][] = [['文件抽取与角色识别', '正文 / 规范 / 修订 / 澄清 / 报价表 / 图纸'], ['切章节', '按「章节标题」规则'], ['条款打标', '分类、强制项、风险、关键字段'], ['生成拆标分解条目', '按类别 + 文件合并，写回投标']];
+type WorkItem = { id: string; title: string; category: string; sourceClause: string; assigneeRole: string; reviewerRole?: string; end: string; status: string; requirementIds?: string[]; requirementCount?: number; mandatoryCount?: number; riskCount?: number; reviewCount?: number; amended?: boolean };
+type Bundle = { doc: { filename: string; version: string; size: string } | null; result: TenderParseResult | null; items: WorkItem[]; job?: TenderJob | null };
+const STEPS: [TenderProgress['stage'], string, string][] = [['extract', '文件抽取', '读取正文 / 规范 / 修订 / 澄清 / 报价表 / 图纸'], ['judge', '条款判断', '配置了模型时逐批判断，否则按规则打标'], ['summary', '生成拆标分解条目', '按类别 + 文件合并，写回投标']];
+const POLL_MS = 1500;
 const STATUS: Record<string, string> = { pending: '待开始', in_progress: '进行中', done: '已完成', blocked: '阻塞' };
 const token = () => localStorage.getItem('sb-token') || '';
 
@@ -55,27 +56,25 @@ function Empty({ onSample, onUpload }: { onSample: (s: Sample) => void; onUpload
   );
 }
 
-function Parsing({ name }: { name: string }) {
-  const [pct, setPct] = useState(4);
-  useEffect(() => {
-    const t = window.setInterval(() => setPct(p => Math.min(92, p + (p < 60 ? 3 : 1))), 400);
-    return () => window.clearInterval(t);
-  }, []);
-  const step = pct < 25 ? 1 : pct < 55 ? 2 : pct < 80 ? 3 : 4;
+function Parsing({ name, progress }: { name: string; progress?: TenderProgress }) {
+  // 进度全部来自后台任务，不做模拟：抽取占 20%，判断占 70%，汇总占 10%
+  const step = STEPS.findIndex(([k]) => k === (progress?.stage || 'extract'));
+  const ratio = progress && progress.total ? progress.done / progress.total : 0;
+  const pct = Math.round(step === 0 ? ratio * 20 : step === 1 ? 20 + ratio * 70 : 90 + ratio * 10);
   return (
     <div className="p9-docs-empty">
       <span className="p9-ring" style={{ '--pct': pct } as React.CSSProperties}><b>{pct}%</b></span>
       <h2>正在解析招标文件…</h2>
-      <p>{name} · 整包较大时约需 10–70 秒</p>
+      <p>{name} · 配置模型后大包可能要几分钟，可以先离开，回来会继续显示进度</p>
       <div className="p9-parse-card">
-        <div className="p9-parse-head"><b>解析进度</b><span className="p9-grow" /><span className="tone-blue">{step} / 4 步</span></div>
+        <div className="p9-parse-head"><b>解析进度</b><span className="p9-grow" /><span className="tone-blue">{step + 1} / {STEPS.length} 步</span></div>
         <div className="p9-parse-bar"><i style={{ width: pct + '%' }} /></div>
-        {STEPS.map(([t, s], i) => {
-          const st = i + 1 < step ? 'done' : i + 1 === step ? 'now' : 'todo';
+        {STEPS.map(([k, t, s], i) => {
+          const st = i < step ? 'done' : i === step ? 'now' : 'todo';
           return (
-            <div key={t} className={'p9-parse-step is-' + st}>
+            <div key={k} className={'p9-parse-step is-' + st}>
               <span className="p9-parse-ic">{st === 'done' ? <CircleCheck size={12} /> : st === 'now' ? <Loader size={11} className="spin" /> : null}</span>
-              <div><b>{t}</b><small>{s}</small></div>
+              <div><b>{t}</b><small>{st === 'now' && progress?.message ? progress.message : s}</small></div>
             </div>
           );
         })}
@@ -103,7 +102,7 @@ function WorkItems({ items, result }: { items: WorkItem[]; result: TenderParseRe
               <React.Fragment key={r.id}>
                 <button type="button" className="p9-tr is-32 p9-tr-btn" onClick={() => setOpen(isOpen ? null : r.id)}>
                   {isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                  <span className="p9-doc-title" title={r.sourceClause}>{r.title}{r.amended && <Pill tone="blue" shape="tag">含修订</Pill>}</span>
+                  <span className="p9-doc-title" title={r.sourceClause}>{r.title}{r.amended && <Pill tone="blue" shape="tag">含修订</Pill>}{!!r.reviewCount && <Pill tone="orange" shape="tag">待确认 {r.reviewCount}</Pill>}</span>
                   <span className="p9-td-c">{r.requirementCount} · <b>{r.mandatoryCount}</b> · <span className={cx(!!r.riskCount && 'tone-red is-bold')}>{r.riskCount}</span></span>
                   <span className="p9-td-c">{r.assigneeRole}{r.reviewerRole ? ' / ' + r.reviewerRole : ''}</span>
                   <span className="p9-td-c is-muted p9-mono">{r.end?.slice(5)}</span>
@@ -129,22 +128,38 @@ function WorkItems({ items, result }: { items: WorkItem[]; result: TenderParseRe
 export function LiveDocs() {
   const { api, bid, notify, setTab, setPlan, today } = useP9();
   const [data, setData] = useState<Bundle | null>(null);
-  const [busy, setBusy] = useState('');
+  const [job, setJob] = useState<TenderJob | null>(null);
   const [view, setView] = useState<'items' | 'reqs'>('items');
   const [submitted, setSubmitted] = useState(false);
+  const [uploading, setUploading] = useState('');
   const reupload = useRef<HTMLInputElement>(null);
   const base = '/bids/' + encodeURIComponent(bid.id);
-  useEffect(() => { setData(null); void api(base + '/tender').then(setData).catch(() => setData({ doc: null, result: null, items: [] })); }, [base]);
+  useEffect(() => {
+    setData(null); setJob(null);
+    void api(base + '/tender').then((b: Bundle) => { setData(b); setJob(b.job || null); }).catch(() => setData({ doc: null, result: null, items: [] }));
+  }, [base]);
 
-  const done = (j: { result: TenderParseResult; items: WorkItem[] }) => {
-    notify(`解析完成：${j.result.stats.items} 条要求，生成 / 更新 ${j.items.length} 个拆标分解条目`);
-    void api(base + '/plan').then((p: { items?: Record<string, unknown>[] }) => { if (p?.items?.length) setPlan(mapPlan(p.items, today)); }).catch(() => undefined);
-    return api(base + '/tender').then(setData);
-  };
+  const jobId = job?.id;
+  useEffect(() => {
+    if (!jobId) return;
+    let alive = true;
+    const tick = () => void api('/tender/jobs/' + jobId).then(async (j: TenderJob) => {
+      if (!alive) return;
+      if (j.status === 'running') { setJob(j); timer = window.setTimeout(tick, POLL_MS); return; }
+      if (j.status === 'failed') notify('解析失败：' + (j.error || '未知原因'));
+      else void api(base + '/plan').then((p: { items?: Record<string, unknown>[] }) => { if (p?.items?.length) setPlan(mapPlan(p.items, today)); }).catch(() => undefined);
+      const b: Bundle = await api(base + '/tender');
+      if (!alive) return;
+      setData(b); setJob(null); setSubmitted(false);
+      if (j.status === 'done' && b.result) notify(`解析完成：${b.result.stats.items} 条要求，${b.items.length} 个拆标分解条目`);
+    }).catch((e: Error) => { if (alive) { notify('读取解析进度失败：' + e.message); setJob(null); } });
+    let timer = window.setTimeout(tick, POLL_MS);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [jobId, base]);
+
   async function parseSample(s: Sample) {
-    setBusy(s.name);
-    try { await done(await api(base + '/tender/parse', { method: 'POST', body: { sample: s.id } })); }
-    catch (e) { notify('解析失败：' + (e as Error).message); } finally { setBusy(''); }
+    try { setJob(await api(base + '/tender/parse', { method: 'POST', body: { sample: s.id } })); }
+    catch (e) { notify('解析失败：' + (e as Error).message); }
   }
   async function upload(list: FileList | null) {
     if (!list?.length) return;
@@ -152,16 +167,17 @@ export function LiveDocs() {
     const first = (list[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/')[0];
     form.append('name', first || list[0].name);
     for (const f of Array.from(list)) form.append('files', f, (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name);
-    setBusy(first || list[0].name);
+    setUploading(first || list[0].name);
     try {
       const r = await fetch('/api' + base + '/tender/upload', { method: 'POST', headers: { Authorization: 'Bearer ' + token() }, body: form });
       const j = await r.json();
       if (!r.ok) throw new Error(j.message || j.error);
-      await done(j);
-    } catch (e) { notify('解析失败：' + (e as Error).message); } finally { setBusy(''); if (reupload.current) reupload.current.value = ''; }
+      setJob(j);
+    } catch (e) { notify('解析失败：' + (e as Error).message); } finally { setUploading(''); if (reupload.current) reupload.current.value = ''; }
   }
 
-  if (busy) return <Parsing name={busy} />;
+  if (uploading) return <Parsing name={uploading} />;
+  if (job) return <Parsing name={job.packageName} progress={job.progress} />;
   if (!data) return <div className="p9-docs-empty"><Loader size={16} className="spin" /></div>;
   if (!data.result) return <Empty onSample={parseSample} onUpload={upload} />;
   const r = data.result;
@@ -186,6 +202,7 @@ export function LiveDocs() {
           <Kpi label="高风险" value={s.risks.high} tone={s.risks.high ? 'red' : undefined} />
           <Kpi label="修订 / 澄清引用" value={r.overrides.length} />
         </div>
+        <div className="p9-docs-warn"><JudgeNote r={r} /></div>
         {!!r.warnings.length && <div className="tp-alert orange p9-docs-warn"><div>{r.warnings.map(w => <div key={w}>{w}</div>)}</div></div>}
       </section>
       <div className="tp-two"><FilesCard r={r} /><FieldsCard fields={r.fields} /></div>

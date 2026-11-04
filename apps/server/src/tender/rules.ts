@@ -42,18 +42,33 @@ export const ruleSetSchema = z.object({
     clauseMaxLength: z.number().int().min(80).max(4000),
     minCategoryScore: z.number().min(0).max(50),
   }),
+  judge: z.object({
+    enabled: z.boolean(),
+    prompt: z.string().min(1, '提示词不能为空').max(8000),
+    policies: z.array(z.string().min(1).max(300)).max(100),
+    examples: z.array(z.object({
+      id, text: z.string().min(1, '示例原文不能为空').max(1200), isRequirement: z.boolean(), category: category.optional(),
+      strength: z.enum(['prohibited', 'mandatory', 'required', 'recommended']).optional(), note: z.string().max(300).optional(), enabled: z.boolean(),
+    })).max(200),
+    batchSize: z.number().int().min(1).max(100),
+    concurrency: z.number().int().min(1).max(20),
+    minConfidence: z.number().min(0).max(1),
+  }),
 });
 
 function seedDefault(): TenderRuleSet {
   return structuredClone({ ...DEFAULT_RULES, version: 1, updatedAt: now(), updatedBy: '系统默认' });
 }
 
+/** 接入模型判断之前保存的规则没有 judge，读取时补上默认值。 */
+const withJudge = (r: TenderRuleSet): TenderRuleSet => (r.judge ? r : { ...r, judge: structuredClone(DEFAULT_RULES.judge) });
+
 export function getRules(): TenderRuleSet {
   const cur = get<TenderRuleSet>('tender_rules', ACTIVE);
   // 从没人改过的系统默认规则跟着代码里的默认值走（默认规则升级后自动生效）；改过的版本保持不动
   const body = ({ version: _v, updatedAt: _a, updatedBy: _b, ...r }: TenderRuleSet) => JSON.stringify(r);
   const stale = cur && cur.updatedBy === '系统默认' && body(cur) !== body(seedDefault());
-  if (cur && !stale) return cur;
+  if (cur && !stale) return withJudge(cur);
   if (stale) { const next = { ...seedDefault(), version: cur.version }; put('tender_rules', ACTIVE, next); put('tender_rules_history', `v${next.version}`, next); return next; }
   const seeded = seedDefault();
   put('tender_rules', ACTIVE, seeded);
@@ -96,7 +111,7 @@ export function restoreRules(user: User, version: number): TenderRuleSet {
   const old = get<TenderRuleSet>('tender_rules_history', `v${version}`);
   if (!old) throw new AppError('NOT_FOUND', `没有 v${version} 的规则快照`, 404);
   const cur = getRules();
-  const next: TenderRuleSet = { ...structuredClone(old), version: cur.version + 1, updatedAt: now(), updatedBy: `${user.name}（回滚到 v${version}）` };
+  const next: TenderRuleSet = { ...structuredClone(withJudge(old)), version: cur.version + 1, updatedAt: now(), updatedBy: `${user.name}（回滚到 v${version}）` };
   put('tender_rules', ACTIVE, next);
   put('tender_rules_history', `v${next.version}`, next);
   return next;

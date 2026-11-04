@@ -207,6 +207,14 @@
 .tp-pv-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 4px; }
 .tp-pv-text { font-size: 12px; }
 .tp-runs { overflow: hidden; }
+.tp-alert.blue { background: var(--primary-light); color: var(--primary); }
+.tp-review { display: flex; gap: 6px; align-items: flex-start; margin: 6px 0; padding: 6px 8px; border-radius: 8px; background: var(--orange-light); color: #8A4B00; font-size: 12px; }
+.tp-review svg { flex: none; margin-top: 2px; }
+.tp-evidence { margin: 6px 0; font-size: 12px; color: var(--text-2); }
+.tp-evidence b { margin-right: 8px; color: var(--text-1, inherit); }
+.tp-judge { display: flex; flex-direction: column; gap: 14px; }
+.tp-judge-text { width: 100%; min-height: 180px; border: 1px solid var(--border); border-radius: 10px; padding: 10px; font-family: var(--font-primary, "Microsoft YaHei"), sans-serif; font-size: 12px; line-height: 1.6; resize: vertical; }
+.tp-judge-text.short { min-height: 88px; }
 
 @media (max-width: 1200px) {
   .tp-bench, .tp-rule-body, .tp-two, .tp-tester-body { grid-template-columns: minmax(0, 1fr); }
