@@ -412,7 +412,14 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
     key: r.clauseKey, text: r.cl.text.slice(0, CLAUSE_TEXT_CAP), section: r.cl.section.title, fileName: r.w.file.name, fileRole: r.w.file.role,
     hint: { category: r.tag.category, strength: r.tag.strength, risks: r.tag.risks.map((x) => x.label) },
   })) : [];
-  const outcome: JudgeOutcome | undefined = opts.judge && candidates.length ? await opts.judge(candidates, rules.judge, progress) : undefined;
+  const riskLabels = rules.risks.filter((r) => r.enabled).map((r) => r.label);
+  const outcome: JudgeOutcome | undefined = opts.judge && candidates.length ? await opts.judge(candidates, rules.judge, progress, riskLabels) : undefined;
+  // 模型自拟的风险名去掉空格后和规则库重名的，统一成规则库的名称和处理建议
+  const ruleRisk = new Map(rules.risks.map((r) => [r.label.replace(/\s+/g, ''), r]));
+  const canonRisk = (x: { label: string; severity: Severity; advice: string }) => {
+    const r = ruleRisk.get(x.label.replace(/\s+/g, ''));
+    return r ? { label: r.label, severity: x.severity, advice: r.advice || x.advice } : x;
+  };
   progress({ stage: 'summary', done: 0, total: 1, message: '生成拆标分解表' });
 
   const seen = new Set<string>();
@@ -434,7 +441,7 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
     seen.add(dedupe);
     items.push({
       id: '', no: 0, category: m.category, title: titleOf(cl.text), text: cl.text.slice(0, CLAUSE_TEXT_CAP),
-      strength: m.strength, risks: m.risks,
+      strength: m.strength, risks: [...new Map(m.risks.map(canonRisk).map((x) => [x.label, x])).values()],
       fileId: w.file.id, fileName: w.file.name, fileRole: w.file.role, section: cl.section.title, page: cl.page,
       ...ownerFields(rules, m.category, deadlineIso),
       score: tag.score, amended: amendedSections.has(`${w.file.name}::${cl.section.title}`),

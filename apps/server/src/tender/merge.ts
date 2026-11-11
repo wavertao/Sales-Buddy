@@ -32,10 +32,16 @@ export function mergeVerdict(rule: RuleView, verdict: Verdict | undefined, minCo
   const base = { source, summary: verdict.summary || undefined, quote: verdict.quote, reason: verdict.reason || undefined, confidence: verdict.confidence };
   const highRisks = rule.risks.filter((r) => r.severity === 'high');
 
+  const guarded = rule.strength === 'prohibited' || highRisks.length > 0;
   if (!verdict.isRequirement) {
-    const guarded = rule.strength === 'prohibited' || highRisks.length > 0;
     if (!guarded) return { ...base, include: false, risks: [], needsReview: false, reviewReasons: [], excludedBecause: verdict.reason || '模型判定不是要求' };
     return { ...base, include: true, category: rule.category, strength: rule.strength, risks: rule.risks, needsReview: true, reviewReasons: ['模型认为这不是要求，但规则判为否决或高风险'] };
+  }
+  // 业主或其他承包商的责任不进我方分解表，放进「已排除」写明归谁，需要时可以捞回
+  if (verdict.party !== 'bidder') {
+    const who = verdict.party === 'owner' ? '业主' : '其他承包商';
+    if (!guarded) return { ...base, include: false, risks: [], needsReview: false, reviewReasons: [], excludedBecause: `${who}的责任${verdict.summary ? `：${verdict.summary}` : ''}` };
+    reasons.push(`模型认为这是${who}的责任，但规则判为否决或高风险`);
   }
 
   let strength = verdict.strength;
