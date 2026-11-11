@@ -419,10 +419,10 @@ test('TENDER-16 工作项归纳：条数多时先拟清单再分批分配，不�
     return JSON.stringify({ groups: [{ wi: 0, ids: body.filter((r) => r.ppc).map((r) => r.id) }, { wi: 1, ids: body.filter((r) => !r.ppc).map((r) => r.id) }, { wi: 9, ids: ['r1'] }] });
   }, `fake-${Date.now()}`);
   const out = await grouper(items, ['Schedule 18 Technical'], () => {});
-  assert.deepEqual(calls.sort(), ['assign', 'assign', 'assign', 'catalog']);
+  assert.deepEqual(calls.sort(), [...Array(7).fill('assign'), 'catalog'], '先拟一次清单，再按 40 条一批分配');
   const titles = out.map((w) => w.title);
   assert.deepEqual(titles, ['编制 PPC 通信接口方案', '编制消防方案', '其他技术要求']);
   assert.equal(out.reduce((s, w) => s + w.requirementKeys.length, 0), 250, '每条要求分且只分一次');
-  assert.equal(out[2].requirementKeys.length, 3, '每批漏掉的一条进「其他」');
+  assert.equal(out[2].requirementKeys.length, 7, '每批漏掉的一条进「其他」');
   assert.ok(out[0].requirementKeys.length > 100, '跨文件的同一件事归到同一个工作项');
 });
