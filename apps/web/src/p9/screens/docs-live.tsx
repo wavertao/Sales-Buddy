@@ -3,8 +3,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CircleCheck, Download, FileArchive, FileUp, FolderInput, FolderOpen, Globe, HardDrive, Info, Loader, Send, Upload } from 'lucide-react';
 import type { ExcludedClause, TenderJob, TenderParseResult, TenderProgress } from '../../../../../packages/contracts/tender';
-import { ExcludedCard, FieldsCard, FilesCard, JudgeNote, Kpi, OverridesCard, exportCsv, fmtSize, type ReviewFn } from '../../tender/TenderResult';
+import { ExcludedCard, FieldsCard, FilesCard, JudgeNote, Kpi, OverridesCard, fmtSize, type ReviewFn } from '../../tender/TenderResult';
 import { TenderBreakdown, type WorkItem } from '../../tender/TenderBreakdown';
+import { exportBreakdownXlsx } from '../../tender/export-xlsx';
 import { mapPlan } from '../live';
 import { useP9 } from '../store';
 import { Btn } from '../ui';
@@ -169,7 +170,7 @@ export function LiveDocs() {
           <span className="tb-subtabs-meta"><FileArchive size={12} /> {r.packageName} · {data.doc?.version} · {r.createdAt.slice(5, 10)} 解析 · {r.judge?.mode === 'model' ? '模型判断' : '规则判断'}</span>
           <input ref={reupload} type="file" hidden multiple onChange={e => upload(e.target.files)} />
           <Btn kind="outline" size="sm" icon={Upload} onClick={() => reupload.current?.click()}>上传新版</Btn>
-          <Btn kind="outline" size="sm" icon={Download} onClick={() => { exportCsv(r); notify('已导出拆标分解表（CSV）'); }}>导出</Btn>
+          <Btn kind="outline" size="sm" icon={Download} onClick={() => { void api(base + '/tender/excluded').catch(() => []).then((ex: ExcludedClause[]) => exportBreakdownXlsx(r, data.items, ex)).then(() => notify('已导出拆标分解表（Excel：工作项、要求明细、已排除）')).catch((e: Error) => notify('导出失败：' + e.message)); }}>导出</Btn>
           <Btn kind="primary" size="sm" icon={Send} disabled={submitted} onClick={() => { setSubmitted(true); notify('已提交 BSD 审核：拆解表版本已锁定，BSD 收到待办'); window.setTimeout(() => setTab('plan'), 900); }}>{submitted ? '已提交 BSD' : '提交 BSD 审核'}</Btn>
         </div>
       </div>
