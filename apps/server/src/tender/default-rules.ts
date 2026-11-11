@@ -129,6 +129,7 @@ export const DEFAULT_RULES: Omit<TenderRuleSet, 'version' | 'updatedAt' | 'updat
       { id: 'ex-cn-shall', text: '投标人应当提供近三年储能项目业绩证明材料。', isRequirement: true, category: 'commercial', strength: 'required', enabled: true },
       { id: 'ex-def', text: '"Contract Price" means the total amount payable to the Contractor under the Contract.', isRequirement: false, note: '只是定义，不是要求', enabled: true },
     ],
-    batchSize: 30, concurrency: 5, minConfidence: 0.6,
+    // 2026-11-11 SCNet DeepSeek 实测：每批 30 条约 90–100 秒，贴着 120 秒超时；改小每批、加大并发
+    batchSize: 20, concurrency: 8, minConfidence: 0.6,
   },
 };

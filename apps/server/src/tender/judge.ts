@@ -27,6 +27,7 @@ export type ModelCall = (system: string, user: string) => Promise<string>;
 
 /** 连续这么多批调用失败就停（密钥错、服务挂了），不再把整包发一遍 */
 const MAX_CONSECUTIVE_FAILURES = 3;
+export const RETRY_DELAY_MS = Number(process.env.TENDER_JUDGE_RETRY_MS || 3000);
 const compact = (s: string) => s.replace(/\s+/g, '').toLowerCase();
 
 export const clauseKey = (text: string) => createHash('sha256').update(compact(text)).digest('hex').slice(0, 16);
@@ -122,8 +123,13 @@ export function makeJudge(call: ModelCall = defaultModelCall, source: JudgeSourc
     await Promise.all(Array.from({ length: Math.min(cfg.concurrency, batches.length) }, async () => {
       while (next < batches.length && streak < MAX_CONSECUTIVE_FAILURES) {
         const batch = batches[next++];
+        // 超时、网络抖动常是一过性的：同一批隔几秒再试一次，仍失败才算失败（2026-11-11 SCNet 并发 10 时 52 批里 10 批超时）
         try { await runBatch(batch); streak = 0; }
-        catch (e) { failedBatches++; streak++; note = `模型调用失败：${(e as Error).message}`; }
+        catch {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+          try { await runBatch(batch); streak = 0; }
+          catch (e) { failedBatches++; streak++; note = `模型调用失败：${(e as Error).message}`; }
+        }
         done++;
         report();
       }

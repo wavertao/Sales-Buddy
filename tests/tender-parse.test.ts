@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import JSZip from 'jszip';
 
 process.env.DATABASE_PATH = join(mkdtempSync(join(process.cwd(), 'data-test-tender-')), 'test.sqlite');
+process.env.TENDER_JUDGE_RETRY_MS = '0';
 const { DEFAULT_RULES } = await import('../apps/server/src/tender/default-rules.ts');
 const { parsePackage, previewText } = await import('../apps/server/src/tender/pipeline.ts');
 const { getRules, saveRules, resetRules, restoreRules } = await import('../apps/server/src/tender/rules.ts');
@@ -147,7 +148,9 @@ test('TENDER-08 融合：否决和高风险护栏、分歧标待确认、低置�
   const out = mergeVerdict(rule(), verdict({ isRequirement: false, reason: '只是定义' }), 0.6, 'model');
   assert.equal(out.include, false);
   assert.equal(out.excludedBecause, '只是定义');
-  assert.ok(mergeVerdict(rule(), verdict({ strength: 'mandatory' }), 0.6, 'model').needsReview, '强制档分歧要人看');
+  assert.ok(mergeVerdict(rule(), verdict({ strength: 'prohibited' }), 0.6, 'model').needsReview, '模型升为否决要人看');
+  assert.ok(!mergeVerdict(rule(), verdict({ strength: 'mandatory' }), 0.6, 'model').needsReview, '模型把一般要求升为强制不打扰人');
+  assert.ok(mergeVerdict(rule({ strength: 'mandatory' }), verdict({ strength: 'required' }), 0.6, 'model').needsReview, '模型下调强制要人看');
   const plain = mergeVerdict(rule(), verdict(), 0.6, 'model');
   assert.equal(plain.category, 'technical', '类别听模型');
   assert.equal(plain.needsReview, false, '只有类别分歧不打扰人');
@@ -183,7 +186,10 @@ test('TENDER-10 模型失败：连续失败即停，退回规则结果并如实�
   const small = () => { const x = rules(); x.judge.batchSize = 1; x.judge.concurrency = 1; return x; };
   let calls = 0;
   const failing = await parsePackage(small(), '包', pkg, 'upload', { judge: makeJudge(async () => { calls++; throw new Error('HTTP 401'); }, 'mock', 'bad') });
-  assert.equal(calls, 3, '连续失败 3 批就停');
+  assert.equal(calls, 6, '每批重试一次，连续失败 3 批就停');
+  let flakyCalls = 0;
+  const once = await parsePackage(small(), '包', pkg, 'upload', { judge: makeJudge(async (s, u) => { if (++flakyCalls === 1) throw new Error('timeout'); return fakeModel(() => ({}))(s, u); }, 'mock', 'once') });
+  assert.equal(once.judge!.failedBatches, 0, '一过性超时重试后成功');
   assert.ok(failing.warnings.some((w) => w.includes('HTTP 401')));
   assert.ok(failing.judge!.failedBatches > 3 && failing.judge!.unverified === failing.items.length);
   assert.ok(failing.items.find((i) => i.text.includes('UL9540A'))?.strength === 'prohibited', '退回规则仍能找到否决项');

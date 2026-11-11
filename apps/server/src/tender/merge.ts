@@ -42,8 +42,11 @@ export function mergeVerdict(rule: RuleView, verdict: Verdict | undefined, minCo
   if (rule.strength === 'prohibited' && strength !== 'prohibited') {
     strength = 'prohibited';
     reasons.push('规则判为否决，模型判得更低，先按否决保留');
-  } else if (STRONG.has(rule.strength) !== STRONG.has(strength)) {
-    reasons.push(STRONG.has(strength) ? '模型判为强制或否决，规则没有' : '规则判为强制，模型判得更低');
+  } else if (STRONG.has(rule.strength) && !STRONG.has(strength)) {
+    reasons.push('规则判为强制，模型判得更低');
+  } else if (strength === 'prohibited') {
+    // 模型把一般要求升为强制不打扰人（规则本来就只认字面）；升到否决影响废标，要人看一眼
+    reasons.push('模型判为否决，规则没有');
   }
 
   const risks = [...verdict.risks];
