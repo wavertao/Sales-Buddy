@@ -14,7 +14,7 @@ import { defaultModelCall, type ModelCall } from './judge.ts';
  */
 export type Grouper = (items: DecompItem[], schedules: string[], onProgress: (p: TenderProgress) => void) => Promise<TenderWorkItem[]>;
 
-const PROMPT_VERSION = 2;
+const PROMPT_VERSION = 3;
 /** 一次调用直接分组的上限，超过就先拟清单再分批分配 */
 const DIRECT = 100;
 /** 分配时每批条数：SCNet 上的 DeepSeek 带推理，120 条一批会超过 120 秒超时（2026-11-11 实测），40 条一批约半分钟 */
@@ -149,7 +149,8 @@ export function makeGrouper(call: ModelCall = defaultModelCall, model: string | 
         else byKey.set(key, { key, category, title: d.title, deliverable: d.deliverable, owner: d.owner, requirementKeys: d.keys, source: 'model' });
       }
       const final = [...byKey.values()];
-      put('tender_workitems', cacheId, final);
+      // 有批次失败、大量没分上的不缓存，下次重解析再试
+      if (rest.length <= its.length * 0.1) put('tender_workitems', cacheId, final);
       report();
       return final;
     }));
