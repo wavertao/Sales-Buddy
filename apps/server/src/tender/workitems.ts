@@ -17,11 +17,13 @@ export type Grouper = (items: DecompItem[], schedules: string[], onProgress: (p:
 const PROMPT_VERSION = 2;
 /** 一次调用直接分组的上限，超过就先拟清单再分批分配 */
 const DIRECT = 100;
-/** 分配时每批条数 */
-const CHUNK = 120;
+/** 分配时每批条数：SCNet 上的 DeepSeek 带推理，120 条一批会超过 120 秒超时（2026-11-11 实测），40 条一批约半分钟 */
+const CHUNK = 40;
 const ROLES = ['SLS', 'PM', 'SC', 'QA', 'AMD', 'BSD'] as const;
 const CAT_LABEL = Object.fromEntries(TENDER_CATEGORIES.map((c) => [c.key, c.label])) as Record<TenderCategory, string>;
 const RANK = { prohibited: 4, mandatory: 3, required: 2, recommended: 1 } as const;
+/** 超时、坏 JSON 都重试一次 */
+async function twice<T>(f: () => Promise<T>) { try { return await f(); } catch { return f(); } }
 const hash = (v: unknown, n = 12) => createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0, n);
 
 const itemSchema = z.object({
@@ -52,7 +54,7 @@ function catalogPrompt(category: TenderCategory, rows: string[]) {
   const system = `${head(category)}（摘要已截短）
 先通读全部要求，拟一份工作项清单，后面会把每条要求分进清单里的某一项。
 ${RULES}
-清单要覆盖所有要求，一般 10 到 35 个工作项，彼此不重叠。
+清单要覆盖所有要求，彼此不重叠。一般 8 到 25 个工作项，每项通常对应 5 条以上要求；零散的一两条并入最接近的工作项，不要单独成项。
 {"workItems":[{"title":"","deliverable":"","owner":"SC"}]}`;
   return { system, user: rows.join('\n') };
 }
@@ -104,7 +106,7 @@ export function makeGrouper(call: ModelCall = defaultModelCall, model: string | 
       try {
         if (its.length <= DIRECT) {
           const { system, user } = groupPrompt(category, its.map((i, n) => row(i, n, 120)));
-          const got = groupSchema.parse(parseJson(await call(system, user)));
+          const got = await twice(async () => groupSchema.parse(parseJson(await call(system, user))));
           const used = new Set<string>();
           for (const w of got.workItems) {
             const keys = w.ids.map((id) => pick(its, id)).filter((i) => i && !used.has(keyOf(i))).map(keyOf);
@@ -115,14 +117,14 @@ export function makeGrouper(call: ModelCall = defaultModelCall, model: string | 
           // 先拟清单：全部摘要一次给模型，摘要截短控制长度
           const short = its.length > 400 ? 40 : 60;
           const { system, user } = catalogPrompt(category, its.map((i, n) => row(i, n, short)));
-          const catalog = catalogSchema.parse(parseJson(await call(system, user))).workItems;
+          const catalog = (await twice(async () => catalogSchema.parse(parseJson(await call(system, user))))).workItems;
           drafts = catalog.map((w) => ({ ...w, keys: [] }));
           const used = new Set<string>();
           const parts = Array.from({ length: Math.ceil(its.length / CHUNK) }, (_, n) => its.slice(n * CHUNK, n * CHUNK + CHUNK));
           await Promise.all(parts.map(async (part) => {
             try {
               const a = assignPrompt(category, catalog, part.map((i, n) => row(i, n, 120)));
-              const got = assignSchema.parse(parseJson(await call(a.system, a.user)));
+              const got = await twice(async () => assignSchema.parse(parseJson(await call(a.system, a.user))));
               for (const g of got.groups) {
                 const target = drafts[g.wi];
                 if (!target) continue;
