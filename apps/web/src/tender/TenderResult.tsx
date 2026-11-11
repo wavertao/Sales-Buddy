@@ -114,7 +114,8 @@ const fix = (f: TenderParseResult['files'][number]) => (f.status === 'scanned' ?
  * 解析覆盖：只说会影响结果的事。图纸、图片、重复文件不单独提示（文件清单里有状态），
  * 正文、合同、规范、报价表这类文件没解析出来才提醒，因为可能漏了要求。
  */
-export function Coverage({ r, onOpen }: { r: TenderParseResult; onOpen?: (fileId: string, name: string) => void }) {
+/** 覆盖情况一句话，和可能漏要求的文件；页面和导出共用 */
+export function coverage(r: TenderParseResult) {
   const miss = r.files.filter(unparsed);
   const key = miss.filter((f) => !minor(f));
   const ok = r.files.length - miss.length;
@@ -122,19 +123,33 @@ export function Coverage({ r, onOpen }: { r: TenderParseResult; onOpen?: (fileId
     miss.length ? `${r.files.length} 个文件，解析 ${ok} 个` : `${r.files.length} 个文件全部解析`,
     miss.length - key.length ? `${miss.length - key.length} 个图纸 / 图片 / 地图未解析，通常不含条款要求` : '',
     r.duplicateFiles ? `另有 ${r.duplicateFiles} 个重复文件已合并` : '',
-  ].filter(Boolean).join('；');
+  ].filter(Boolean).join('；') + '。';
+  return { line, key: key.map((f) => ({ file: f, fix: fix(f) })) };
+}
+/** 文件的说明列：页面和导出共用 */
+export const fileNote = (f: TenderParseResult['files'][number]) => (f.status === 'ok' ? (f.note || '') : unparsed(f) && minor(f) ? '图纸 / 图片类，通常不含条款' : f.note || '');
+/** 模型判断一句话：页面和导出共用 */
+export function judgeLine(r: TenderParseResult) {
+  const j = r.judge;
+  if (!j || j.mode === 'rule') return '本次结果未经模型复核，类别和强度只来自关键词规则。';
+  return `${SOURCE_LABEL[j.mode]}${j.model ? `（${j.model}）` : ''}判断了 ${j.candidates} 条候选，排除 ${j.excluded} 条非要求，${j.needsReview} 条待确认。`
+    + (j.cached > 0 ? ` ${j.cached} 条沿用之前的判断。` : '') + (j.unverified > 0 ? ` ${j.unverified} 条模型未复核，用的是规则结果。` : '') + (j.failedBatches > 0 ? ` ${j.failedBatches} 批调用失败。` : '');
+}
+
+export function Coverage({ r, onOpen }: { r: TenderParseResult; onOpen?: (fileId: string, name: string) => void }) {
+  const { line, key } = coverage(r);
   return (
     <>
-      <div className="tp-coverage">{line}。</div>
+      <div className="tp-coverage">{line}</div>
       {!!key.length && (
         <div className="tp-alert orange">
           <AlertTriangle size={14} />
           <div>
             <b>{key.length} 个可能含要求的文件没解析出来，分解表可能有遗漏</b>
-            {key.map((f) => (
+            {key.map(({ file: f, fix: how }) => (
               <div key={f.id}>
                 {onOpen ? <button type="button" className="tp-filelink" onClick={() => onOpen(f.id, f.name)}>{f.name}</button> : f.name}
-                （{ROLE_LABEL[f.role]}{f.pages ? ` · ${f.pages} 页` : ''}）：{fix(f)}
+                （{ROLE_LABEL[f.role]}{f.pages ? ` · ${f.pages} 页` : ''}）：{how}
               </div>
             ))}
           </div>
@@ -159,7 +174,7 @@ export function FilesCard({ r, onOpen }: { r: TenderParseResult; onOpen?: (fileI
               <td className="tp-num">{f.pages || '–'}</td>
               <td className="tp-num">{f.clauses ? `${f.sections} / ${f.clauses}` : <span className="tp-muted">只登记</span>}</td>
               <td><span className={'tp-pill ' + (f.status === 'ok' ? 'green' : !unparsed(f) || minor(f) ? 'gray' : 'orange')}>{STATUS_LABEL[f.status]}</span></td>
-              <td className="tp-small tp-muted">{f.status === 'ok' ? (f.note || '') : unparsed(f) && minor(f) ? '图纸 / 图片类，通常不含条款' : f.note || ''}</td>
+              <td className="tp-small tp-muted">{fileNote(f)}</td>
             </tr>
           ))}
         </tbody>
