@@ -15,6 +15,8 @@ export type WorkItem = {
   amended?: boolean; deliverable?: string; grouping?: 'model' | 'fallback'; tenderKey?: string;
 };
 export type BreakdownMode = 'list' | 'split';
+/** 「其他 X 要求」和兜底分组排在本类最后 */
+const tailOf = (w: WorkItem) => (w.grouping === 'fallback' || /^其他.+要求$/.test(w.title) ? 1 : 0);
 
 const STATUS: Record<string, string> = { pending: '待开始', in_progress: '进行中', done: '已完成', blocked: '阻塞' };
 const PARTY: [string, string][] = [['bidder', '我方'], ['owner', '业主'], ['other', '其他承包商']];
@@ -134,7 +136,7 @@ export function TenderBreakdown({ result, items, onReview, excludedCount }: {
   const filtering = flags.review || flags.strong || flags.risk || !!q;
   const groups = useMemo(() => TENDER_CATEGORIES.map((c) => ({
     label: c.label,
-    rows: items.filter((w) => w.category === c.label && (cat === 'all' || cat === c.label)).map((w) => ({ w, reqs: (w.requirementIds || []).map((id) => byId.get(id)).filter((x): x is DecompItem => !!x).filter((it) => pass(it, w)) }))
+    rows: items.filter((w) => w.category === c.label && (cat === 'all' || cat === c.label)).sort((a, b) => tailOf(a) - tailOf(b)).map((w) => ({ w, reqs: (w.requirementIds || []).map((id) => byId.get(id)).filter((x): x is DecompItem => !!x).filter((it) => pass(it, w)) }))
       .filter((r) => !filtering || r.reqs.length),
   })).filter((g) => g.rows.length), [items, byId, cat, flags, q]);
   const visible = groups.flatMap((g) => g.rows.flatMap((r) => r.reqs));

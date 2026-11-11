@@ -54,7 +54,9 @@ async function workbook(sheets: Sheet[]) {
 export function breakdownSheets(r: TenderParseResult, items: WorkItem[], excluded: ExcludedClause[]): Sheet[] {
   const byId = new Map(r.items.map((i) => [i.id, i]));
   const order = TENDER_CATEGORIES.map((c) => c.label);
-  const wis = [...items].sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category));
+  // 「其他 X 要求」和兜底分组排在本类最后
+  const tail = (w: WorkItem) => (w.grouping === 'fallback' || /^其他.+要求$/.test(w.title) ? 1 : 0);
+  const wis = [...items].sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category) || tail(a) - tail(b));
   const req = (it: DecompItem, w: WorkItem | undefined): Cell[] => [
     CAT_LABEL[it.category], w?.title || '（未归入工作项）', it.id, it.summary || it.title,
     it.strength ? STRENGTH_LABEL[it.strength] : '', it.needsReview ? (it.reviewReasons?.join('；') || '待确认') : '',
