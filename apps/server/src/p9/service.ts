@@ -8,12 +8,14 @@ import { dateOnly, fmt, parseDate, validateReschedule } from './plan.ts';
 import { tryAdvance } from './state-machine.ts';
 import { allocateBidNumber, canViewQuote, childById, children, collections, loadBid, loadChild, newId, requireQuoteAccess, saveBid, saveChild, stamp } from './store.ts';
 import { allowedRecord, canAccess } from '../crm.ts';
-import { allRecords, record } from '../db.ts';
+import { allRecords, put, record } from '../db.ts';
 import { TENDER_CATEGORIES } from '../../../../packages/contracts/tender.ts';
-import type { ClauseReview, DecompItem, TenderCategory, TenderParseResult, TenderProgress } from '../../../../packages/contracts/tender.ts';
+import type { ClauseReview, DecompItem, TenderCategory, TenderParseResult, TenderProgress, TenderWorkItem } from '../../../../packages/contracts/tender.ts';
 import { getRun, parseSample, parseUpload, runningJobForBid, startJob } from '../tender/service.ts';
 import { getRules } from '../tender/rules.ts';
 import { applyFeedback, excludedOf, reviewClause } from '../tender/review.ts';
+import { fallbackGroups, makeGrouper, strongestOf, type Grouper } from '../tender/workitems.ts';
+import { modelStatus } from '../model.ts';
 import type { SourceFile } from '../tender/extract.ts';
 
 /** 业务时钟日期（db.now() 的日期部分，仓库约定；绝不硬编码 2026-10-24，演示时钟由 BUSINESS_CLOCK 控制）。 */
@@ -691,7 +693,7 @@ export function aiCheck(user: User, id: string) {
  * 同一类别同一文件的条目按 tenderKey 覆盖更新（仅限未开始的），重传新版不会重复生成。
  */
 const TENDER_CAT_LABEL: Record<TenderCategory, string> = Object.fromEntries(TENDER_CATEGORIES.map((c) => [c.key, c.label])) as Record<TenderCategory, string>;
-export async function parseTenderForBid(user: User, bidId: string, input: { sample?: string; upload?: { name: string; files: SourceFile[] } }, onProgress?: (p: TenderProgress) => void) {
+export async function parseTenderForBid(user: User, bidId: string, input: { sample?: string; upload?: { name: string; files: SourceFile[] } }, onProgress?: (p: TenderProgress) => void, deps: { grouper?: Grouper } = {}) {
   const bid = loadBid(user, bidId);
   const result = input.sample ? await parseSample(user.name, input.sample, onProgress) : await parseUpload(user.name, input.upload?.name || '', input.upload?.files || [], onProgress);
   const doc: BidDoc = {
@@ -701,19 +703,40 @@ export async function parseTenderForBid(user: User, bidId: string, input: { samp
     chapters: [], parseStatus: 'parsed', parseError: null, tenderRunId: result.id,
   };
   saveChild(doc);
-  applyFeedback(bid.id, result, getRules());
+  const rules = getRules();
+  applyFeedback(bid.id, result, rules);
+  // 模型判断过的结果再归纳成工作项；没配模型或判断没走模型时按「类别 + 文件」分组
+  const grouper = deps.grouper ?? (result.judge?.mode === 'model' && rules.judge.enabled && modelStatus().configured ? makeGrouper() : undefined);
+  if (grouper && result.items.length) {
+    try { result.workItems = await grouper(result.items, result.schedules || [], onProgress || (() => undefined)); }
+    catch { result.workItems = undefined; }
+    put('tender_runs', result.id, result);
+  }
   const out = syncTenderItems(bid, result);
   let next = loadBid(user, bidId);
   if (['idle', 'planning', 'plan_draft', 'decomposing'].includes(next.aiPipeline)) next = saveBid({ ...next, aiPipeline: 'decomposing', aiLastError: null });
   return { doc, result, items: out, pipeline: next.aiPipeline };
 }
-/** 按「类别 + 文件」写回分解条目。已开始的条目不动；没开始的条目如果要求被改走了，清零留痕，不删除。 */
+/**
+ * 写回分解条目：有工作项分组就按工作项，否则按「类别 + 文件」。改判后归属变了的要求（换了类别、被捞回的）不在原工作项里，走兜底分组。
+ * 已开始的条目不动；没开始的条目如果要求被改走了，清零留痕，不删除。
+ */
 function syncTenderItems(bid: P9Bid, result: TenderParseResult) {
-  const groups = new Map<string, DecompItem[]>();
-  for (const it of result.items) {
-    const k = `${it.category}|${it.fileName}`;
-    groups.set(k, [...(groups.get(k) || []), it]);
+  const byKey = new Map(result.items.map((i) => [i.clauseKey || i.id, i]));
+  const placed = new Set<string>();
+  const plan: { w: TenderWorkItem; its: DecompItem[] }[] = [];
+  for (const w of result.workItems || []) {
+    const its = w.requirementKeys.map((k) => byKey.get(k)).filter((i): i is DecompItem => !!i && i.category === w.category && !placed.has(i.clauseKey || i.id));
+    its.forEach((i) => placed.add(i.clauseKey || i.id));
+    if (its.length) plan.push({ w, its });
   }
+  for (const w of fallbackGroups(result.items.filter((i) => !placed.has(i.clauseKey || i.id)))) {
+    const prev = plan.find((p) => p.w.key === w.key);
+    const its = w.requirementKeys.map((k) => byKey.get(k)!);
+    if (prev) prev.its.push(...its); else plan.push({ w, its });
+  }
+  const groups = new Map(plan.map((p) => [p.w.key, p.its]));
+  const meta = new Map(plan.map((p) => [p.w.key, p.w]));
   const existing = new Map(children<BidItem>(bid.id, 'bid_item').filter((x) => x.tenderKey).map((x) => [String(x.tenderKey), x]));
   const today = todayStr();
   const fallbackEnd = dateOnly(bid.deadlineAt);
@@ -724,11 +747,14 @@ function syncTenderItems(bid: P9Bid, result: TenderParseResult) {
     const risky = its.filter((i) => i.risks.length).length;
     const reviewCount = its.filter((i) => i.needsReview).length;
     const dues = its.map((i) => i.dueDate).filter(Boolean).sort() as string[];
+    const w = meta.get(key)!;
+    const files = [...new Set(its.map((i) => i.fileName))];
     const fields = {
-      title: `${TENDER_CAT_LABEL[first.category]} · ${first.fileName.replace(/\.[^.]+$/, '')}`,
+      title: w.title,
       category: TENDER_CAT_LABEL[first.category],
-      sourceClause: `${first.fileName} · ${its.length} 条要求${mandatory ? ` · 强制 ${mandatory}` : ''}${risky ? ` · 风险 ${risky}` : ''}`,
-      assigneeRole: first.owner, reviewerRole: first.reviewer, end: dues[0] || fallbackEnd,
+      sourceClause: `${files.length > 1 ? `${files.length} 个文件` : files[0]} · ${its.length} 条要求${mandatory ? ` · 强制 ${mandatory}` : ''}${risky ? ` · 风险 ${risky}` : ''}`,
+      deliverable: w.deliverable || '', strength: strongestOf(its) || null, grouping: w.source,
+      assigneeRole: w.owner || first.owner, reviewerRole: first.reviewer, end: dues[0] || fallbackEnd,
       tenderKey: key, tenderRunId: result.id, requirementIds: its.map((i) => i.id),
       requirementCount: its.length, mandatoryCount: mandatory, riskCount: risky, reviewCount, amended: its.some((i) => i.amended),
     };
@@ -736,7 +762,7 @@ function syncTenderItems(bid: P9Bid, result: TenderParseResult) {
     if (prev && prev.status !== 'pending') continue;
     const rec: BidItem = prev
       ? { ...prev, ...fields, updatedAt: stamp() }
-      : { ...childBase(bid, newId('BI'), 'bid_item', fields.title), ...fields, node: 3 as BidItem['node'], assigneeId: null, start: today, status: 'pending', deliverable: '', dependsOn: [] };
+      : { ...childBase(bid, newId('BI'), 'bid_item', fields.title), ...fields, node: 3 as BidItem['node'], assigneeId: null, start: today, status: 'pending', dependsOn: [] };
     out.push(saveChild(rec));
   }
   for (const [key, prev] of existing) {

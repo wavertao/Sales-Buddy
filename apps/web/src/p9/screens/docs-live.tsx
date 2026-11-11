@@ -10,7 +10,7 @@ import { useP9 } from '../store';
 import { Btn, Pill, cx } from '../ui';
 
 type Sample = { id: string; name: string; kind: 'single' | 'package'; files: number; size: number };
-type WorkItem = { id: string; title: string; category: string; sourceClause: string; assigneeRole: string; reviewerRole?: string; end: string; status: string; requirementIds?: string[]; requirementCount?: number; mandatoryCount?: number; riskCount?: number; reviewCount?: number; amended?: boolean };
+type WorkItem = { id: string; title: string; category: string; sourceClause: string; assigneeRole: string; reviewerRole?: string; end: string; status: string; requirementIds?: string[]; requirementCount?: number; mandatoryCount?: number; riskCount?: number; reviewCount?: number; amended?: boolean; deliverable?: string; grouping?: 'model' | 'fallback' };
 type Bundle = { doc: { filename: string; version: string; size: string } | null; result: TenderParseResult | null; items: WorkItem[]; job?: TenderJob | null; canReview?: boolean };
 const STEPS: [TenderProgress['stage'], string, string][] = [['extract', '文件抽取', '读取正文 / 规范 / 修订 / 澄清 / 报价表 / 图纸'], ['judge', '条款判断', '配置了模型时逐批判断，否则按规则打标'], ['summary', '生成拆标分解条目', '按类别 + 文件合并，写回投标']];
 const POLL_MS = 1500;
@@ -102,7 +102,10 @@ function WorkItems({ items, result, onReview }: { items: WorkItem[]; result: Ten
               <React.Fragment key={r.id}>
                 <button type="button" className="p9-tr is-32 p9-tr-btn" onClick={() => setOpen(isOpen ? null : r.id)}>
                   {isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                  <span className="p9-doc-title" title={r.sourceClause}>{r.title}{r.amended && <Pill tone="blue" shape="tag">含修订</Pill>}{!!r.reviewCount && <Pill tone="orange" shape="tag">待确认 {r.reviewCount}</Pill>}</span>
+                  <span className="p9-doc-title" title={r.sourceClause}>
+                    <span className="p9-wi-title">{r.title}{r.amended && <Pill tone="blue" shape="tag">含修订</Pill>}{!!r.reviewCount && <Pill tone="orange" shape="tag">待确认 {r.reviewCount}</Pill>}</span>
+                    <small className="p9-wi-sub">{r.deliverable ? `交付：${r.deliverable}` : r.sourceClause}</small>
+                  </span>
                   <span className="p9-td-c">{r.requirementCount} · <b>{r.mandatoryCount}</b> · <span className={cx(!!r.riskCount && 'tone-red is-bold')}>{r.riskCount}</span></span>
                   <span className="p9-td-c">{r.assigneeRole}{r.reviewerRole ? ' / ' + r.reviewerRole : ''}</span>
                   <span className="p9-td-c is-muted p9-mono">{r.end?.slice(5)}</span>
@@ -225,7 +228,7 @@ export function LiveDocs() {
       {!!r.overrides.length && <OverridesCard r={r} />}
       <section className="p9-card">
         <header className="p9-card-head">
-          <div className="p9-card-head-left"><h3>拆标分解表</h3><span className="p9-card-hint">{data.items.length} 个条目 · {s.items} 条要求 · 按「类别 + 文件」合并，点条目看原始要求</span></div>
+          <div className="p9-card-head-left"><h3>拆标分解表</h3><span className="p9-card-hint">{data.items.length} 个条目 · {s.items} 条要求 · {data.items.some((i) => i.grouping === 'model') ? '模型按工作项归纳' : '按「类别 + 文件」合并'}，点条目看原始要求</span></div>
           <div className="p9-card-head-right">
             <div className="tp-seg">
               <button type="button" className={view === 'items' ? 'on' : ''} onClick={() => setView('items')}>按条目</button>

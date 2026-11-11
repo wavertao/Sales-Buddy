@@ -475,8 +475,11 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
   if (outcome?.note) warnings.push(outcome.note);
   const id = uid('tender');
   if (excluded.length) opts.onExcluded?.(id, excluded);
+  // 应答表目录行「Schedule 10 | Commercial Departures | …」就是要交付的清单
+  const schedules = [...new Set(work.filter((w) => w.extract && w.file.role === 'form').flatMap((w) => w.ex.pages.flatMap((p) =>
+    [...p.text.matchAll(/^\s*(Schedule\s+[0-9]{1,2}[A-Z]?)\s*\|\s*([^|\n]{3,60})/gim)].map((m) => `${m[1]} ${m[2].trim()}`))))].slice(0, 40);
   return {
-    id, packageName, source, createdAt: now(), durationMs: Date.now() - t0, ruleVersion: rules.version, judge,
+    id, packageName, source, createdAt: now(), durationMs: Date.now() - t0, ruleVersion: rules.version, judge, schedules,
     files: parsed, fields, overrides, items,
     stats: {
       files: parsed.length, pages: parsed.reduce((s, f) => s + f.pages, 0),

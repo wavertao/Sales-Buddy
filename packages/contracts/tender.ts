@@ -133,6 +133,12 @@ export interface DecompItem {
   ruleCategory?: TenderCategory; ruleStrength?: Strength;
 }
 export type JudgeSource = 'model' | 'rule' | 'mock' | 'human';
+/** 工作项：一组服务于同一交付物的要求。model = 模型归纳，fallback = 按「类别 + 文件」兜底分组 */
+export interface TenderWorkItem {
+  key: string; category: TenderCategory; title: string; deliverable: string; owner?: TeamRole;
+  /** 包含的要求，按 clauseKey 记，改判、重排编号后仍能对上 */
+  requirementKeys: string[]; source: 'model' | 'fallback';
+}
 /** 人工改判：同一投标下按 clauseKey 记一条，重传新版后继续生效；也是后续自进化的标准答案。 */
 export interface ClauseReview { isRequirement: boolean; category?: TenderCategory; strength?: Strength; note?: string }
 export interface TenderFeedback extends ClauseReview {
@@ -170,6 +176,10 @@ export interface TenderParseResult {
   truncated: boolean;
   /** 旧解析记录没有这一项，视同纯规则 */
   judge?: JudgeSummary;
+  /** 应答表（Returnable Schedules）里列出的要交付项，归纳工作项时当骨架 */
+  schedules?: string[];
+  /** 工作项分组；没有时按「类别 + 文件」分组 */
+  workItems?: TenderWorkItem[];
 }
 
 /** 规则试跑：贴一段文字，看每条规则命中了什么。 */

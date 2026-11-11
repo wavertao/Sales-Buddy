@@ -342,6 +342,40 @@ The Supplier must:
   assert.ok(!r.items.some((i) => i.text.includes('......')), '目录行不当条款');
 });
 
+test('TENDER-15 工作项归纳：模型分组写回条目，漏分的兜底，坏回复整批兜底，改判后保持分组', async () => {
+  const { makeGrouper } = await import('../apps/server/src/tender/workitems.ts');
+  const { seed } = await import('../apps/server/src/seed.ts');
+  const { seedP9 } = await import('../apps/server/src/p9/seed-p9.ts');
+  const C = await import('../apps/server/src/crm.ts');
+  const S = await import('../apps/server/src/p9/service.ts');
+  seed(); seedP9();
+  const adminUser = C.user('U-ADMIN');
+  const bid = S.listBids(adminUser, {}).records[2];
+  const files = [txt('招标文件正文.txt', RFP)];
+  let seenUser = '';
+  // 假模型：技术类前两条归一个工作项，其余漏分；回复里混一个不存在的编号
+  const grouper = makeGrouper(async (system, user) => {
+    seenUser += user + '\n';
+    if (!system.includes('「技术」')) return '不是 JSON';
+    return JSON.stringify({ workItems: [{ title: '编制消防与效率响应', deliverable: 'UL9540A 报告与效率承诺', owner: 'SC', ids: ['r1', 'r2', 'r99'] }] });
+  }, 'fake');
+  const r = await S.parseTenderForBid(adminUser, bid.id, { upload: { name: '包', files } }, undefined, { grouper });
+  assert.ok(seenUser.split('\n').every((l) => l.length <= 200), '归纳时每条只发摘要或标题，不发整段原文');
+  const wi = r.items.find((x) => x.title === '编制消防与效率响应')!;
+  assert.ok(wi, '模型归纳的工作项写回条目');
+  assert.equal(wi.deliverable, 'UL9540A 报告与效率承诺');
+  assert.equal(wi.grouping, 'model');
+  assert.equal(r.items.reduce((n, x) => n + Number(x.requirementCount), 0), r.result.items.length, '每条要求恰好落在一个条目里');
+  assert.ok(r.items.some((x) => x.grouping === 'fallback'), '其他类别的坏回复整批兜底');
+
+  // 改判：把工作项里的一条改成商务，它离开原工作项，进兜底分组；工作项本身保留
+  const moved = r.result.items.find((i) => r.result.workItems![0].requirementKeys.includes(i.clauseKey!))!;
+  const now = S.reviewTenderClause(adminUser, bid.id, moved.clauseKey!, { isRequirement: true, category: 'commercial', strength: 'mandatory' });
+  const still = now.items.find((x) => x.title === '编制消防与效率响应')!;
+  assert.equal(Number(still.requirementCount), Number(wi.requirementCount) - 1);
+  assert.equal(now.items.reduce((n, x) => n + Number(x.requirementCount), 0), now.result!.items.length);
+});
+
 test('TENDER-06 强度分层：shall / 应当 只算一般要求，must / 必须 才算强制，废标 / rejected 算否决', () => {
   const tag = (s: string) => previewText(rules(), `第一章 技术要求\n1.1 ${s}`).clauses[0]?.strength;
   assert.equal(tag('The Supplier shall supply the BESS within 11 months of the effective date.'), 'required');

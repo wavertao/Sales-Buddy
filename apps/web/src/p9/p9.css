@@ -508,6 +508,9 @@
 .p9-tree-sub.is-on { background: var(--primary-light); color: var(--primary); }
 .p9-tree-sub.is-on i { background: var(--primary); }
 .p9-doc-title { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p9-tr-btn .p9-doc-title { display: flex; flex-direction: column; gap: 1px; white-space: normal; }
+.p9-wi-title { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p9-wi-sub { font-size: 10.5px; color: var(--text-3, #8a8f98); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p9-status-dot { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 600; white-space: nowrap; }
 .p9-status-dot i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 
