@@ -294,6 +294,19 @@ test('TENDER-13 人工复核：改判、排除、捞回同步分解条目，重�
 
   assert.throws(() => S.reviewTenderClause(adminUser, bid.id, 'nope', { isRequirement: false }), /不在本次解析结果/);
   assert.throws(() => S.reviewTenderClause(adminUser, bid.id, fire.clauseKey!, { isRequirement: true }), /必须选类别/);
+  // 移到其他工作项、归他方
+  now = S.tenderForBid(adminUser, bid.id);
+  const keys = now.items.map((x) => String(x.tenderKey));
+  const victim = now.result!.items.find((i) => i.clauseKey !== fire.clauseKey && i.clauseKey !== lost.clauseKey)!;
+  const fromKey = now.items.find((x) => (x.requirementIds as string[]).includes(victim.id))!.tenderKey;
+  const target = keys.find((k) => k !== fromKey)!;
+  now = S.reviewTenderClause(adminUser, bid.id, victim.clauseKey!, { isRequirement: true, category: victim.category, strength: victim.strength, workItemKey: target });
+  assert.ok((now.items.find((x) => x.tenderKey === target)!.requirementIds as string[]).includes(victim.id), '人工移到指定工作项');
+  assert.equal(now.items.reduce((n, x) => n + Number(x.requirementCount), 0), now.result!.items.length);
+  now = S.reviewTenderClause(adminUser, bid.id, victim.clauseKey!, { isRequirement: true, category: victim.category, party: 'other' });
+  assert.ok(!now.result!.items.some((i) => i.clauseKey === victim.clauseKey));
+  assert.ok(S.tenderExcluded(adminUser, bid.id).some((e) => e.clauseKey === victim.clauseKey && e.reason.includes('其他承包商')), '归他方写明归谁');
+
   const { users } = await import('../apps/server/src/crm.ts');
   const rep = (users() as (typeof adminUser)[]).filter((x) => x.role === 'sales').map((x) => ({ x, b: S.listBids(x, {}).records[0] })).find((v) => v.b)!;
   assert.equal(S.tenderForBid(rep.x, rep.b.id).canReview, false);

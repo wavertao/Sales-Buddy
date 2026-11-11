@@ -1,20 +1,19 @@
-// P9.4 招标文件（接后端）：空态（上传整包 / 选样本）→ 解析中（标书解析流水线四步）→ 已解析（文件角色、关键字段、修订引用、拆标分解条目）。
-// 解析结果按「类别 + 文件」合并成分解条目写回投标（bid_item），点条目可展开看它包含的原始要求。
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, CircleCheck, Download, FileUp, FolderInput, FolderOpen, Globe, HardDrive, Info, Loader, Send, Upload } from 'lucide-react';
-import type { DecompItem, ExcludedClause, TenderJob, TenderParseResult, TenderProgress } from '../../../../../packages/contracts/tender';
-import { TENDER_CATEGORIES } from '../../../../../packages/contracts/tender';
-import { CAT_LABEL, DecompCard, DecompRow, ExcludedCard, FieldsCard, FilesCard, JudgeNote, Kpi, OverridesCard, exportCsv, fmtSize, type ReviewFn } from '../../tender/TenderResult';
+// P9.4 标书拆解（接后端）：空态（上传整包 / 选样本）→ 解析中（后台任务真实进度）→ 已解析。
+// 已解析分三个子 Tab：拆标分解表（默认，列表 / 左右两种视图，复核在表内完成）、解析概况、已排除。
+import React, { useEffect, useRef, useState } from 'react';
+import { CircleCheck, Download, FileArchive, FileUp, FolderInput, FolderOpen, Globe, HardDrive, Info, Loader, Send, Upload } from 'lucide-react';
+import type { ExcludedClause, TenderJob, TenderParseResult, TenderProgress } from '../../../../../packages/contracts/tender';
+import { ExcludedCard, FieldsCard, FilesCard, JudgeNote, Kpi, OverridesCard, exportCsv, fmtSize, type ReviewFn } from '../../tender/TenderResult';
+import { TenderBreakdown, type WorkItem } from '../../tender/TenderBreakdown';
 import { mapPlan } from '../live';
 import { useP9 } from '../store';
-import { Btn, Pill, cx } from '../ui';
+import { Btn } from '../ui';
 
 type Sample = { id: string; name: string; kind: 'single' | 'package'; files: number; size: number };
-type WorkItem = { id: string; title: string; category: string; sourceClause: string; assigneeRole: string; reviewerRole?: string; end: string; status: string; requirementIds?: string[]; requirementCount?: number; mandatoryCount?: number; riskCount?: number; reviewCount?: number; amended?: boolean; deliverable?: string; grouping?: 'model' | 'fallback' };
 type Bundle = { doc: { filename: string; version: string; size: string } | null; result: TenderParseResult | null; items: WorkItem[]; job?: TenderJob | null; canReview?: boolean };
-const STEPS: [TenderProgress['stage'], string, string][] = [['extract', '文件抽取', '读取正文 / 规范 / 修订 / 澄清 / 报价表 / 图纸'], ['judge', '条款判断', '配置了模型时逐批判断，否则按规则打标'], ['summary', '生成拆标分解条目', '按类别 + 文件合并，写回投标']];
+const STEPS: [TenderProgress['stage'], string, string][] = [['extract', '文件抽取', '读取正文 / 规范 / 修订 / 澄清 / 报价表 / 图纸'], ['judge', '条款判断', '配置了模型时逐批判断，否则按规则打标'], ['summary', '归纳工作项', '模型按工作项归纳，写回投标']];
 const POLL_MS = 1500;
-const STATUS: Record<string, string> = { pending: '待开始', in_progress: '进行中', done: '已完成', blocked: '阻塞' };
+type Sub = 'breakdown' | 'overview' | 'excluded';
 const token = () => localStorage.getItem('sb-token') || '';
 
 function Empty({ onSample, onUpload }: { onSample: (s: Sample) => void; onUpload: (files: FileList | null) => void }) {
@@ -84,55 +83,11 @@ function Parsing({ name, progress }: { name: string; progress?: TenderProgress }
   );
 }
 
-function WorkItems({ items, result, onReview }: { items: WorkItem[]; result: TenderParseResult; onReview?: ReviewFn }) {
-  const [open, setOpen] = useState<string | null>(null);
-  const [req, setReq] = useState<string | null>(null);
-  const byId = useMemo(() => new Map(result.items.map(i => [i.id, i])), [result]);
-  const groups = TENDER_CATEGORIES.map(c => ({ label: c.label, rows: items.filter(i => i.category === c.label) })).filter(g => g.rows.length);
-  return (
-    <div className="p9-table" style={{ '--cols': '14px minmax(0,1fr) 120px 70px 64px 60px' } as React.CSSProperties}>
-      <div className="p9-tr is-head"><div /><div className="p9-th">条目 / 来源</div><div className="p9-th">要求 · 强制 · 风险</div><div className="p9-th">负责 / 复核</div><div className="p9-th">截止</div><div className="p9-th">状态</div></div>
-      {groups.map(g => (
-        <React.Fragment key={g.label}>
-          <div className="p9-tr is-group"><b>{g.label}</b><small>{g.rows.length} 个条目 · {g.rows.reduce((n, r) => n + (r.requirementCount || 0), 0)} 条要求</small></div>
-          {g.rows.map(r => {
-            const isOpen = open === r.id;
-            const reqs = (r.requirementIds || []).map(id => byId.get(id)).filter(Boolean) as DecompItem[];
-            return (
-              <React.Fragment key={r.id}>
-                <button type="button" className="p9-tr is-32 p9-tr-btn" onClick={() => setOpen(isOpen ? null : r.id)}>
-                  {isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                  <span className="p9-doc-title" title={r.sourceClause}>
-                    <span className="p9-wi-title">{r.title}{r.amended && <Pill tone="blue" shape="tag">含修订</Pill>}{!!r.reviewCount && <Pill tone="orange" shape="tag">待确认 {r.reviewCount}</Pill>}</span>
-                    <small className="p9-wi-sub">{r.deliverable ? `交付：${r.deliverable}` : r.sourceClause}</small>
-                  </span>
-                  <span className="p9-td-c">{r.requirementCount} · <b>{r.mandatoryCount}</b> · <span className={cx(!!r.riskCount && 'tone-red is-bold')}>{r.riskCount}</span></span>
-                  <span className="p9-td-c">{r.assigneeRole}{r.reviewerRole ? ' / ' + r.reviewerRole : ''}</span>
-                  <span className="p9-td-c is-muted p9-mono">{r.end?.slice(5)}</span>
-                  <span className="p9-td-c">{STATUS[r.status] || r.status}</span>
-                </button>
-                {isOpen && (
-                  <div className="p9-req-box">
-                    <table className="tp-table tp-decomp">
-                      <thead><tr><th>编号</th><th>类别</th><th>要求</th><th>强度</th><th>风险</th><th>出处</th><th>负责 / 复核</th><th>截止</th></tr></thead>
-                      <tbody>{reqs.map(it => <DecompRow key={it.id} it={it} open={req === it.id} toggle={() => setReq(req === it.id ? null : it.id)} onReview={onReview} />)}</tbody>
-                    </table>
-                  </div>
-                )}
-              </React.Fragment>
-            );
-          })}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
-
 export function LiveDocs() {
   const { api, bid, notify, setTab, setPlan, today } = useP9();
   const [data, setData] = useState<Bundle | null>(null);
   const [job, setJob] = useState<TenderJob | null>(null);
-  const [view, setView] = useState<'items' | 'reqs' | 'excluded'>('items');
+  const [sub, setSub] = useState<Sub>('breakdown');
   const [excluded, setExcluded] = useState<ExcludedClause[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [uploading, setUploading] = useState('');
@@ -163,16 +118,16 @@ export function LiveDocs() {
 
   const runId = data?.result?.id;
   useEffect(() => {
-    if (view !== 'excluded' || !runId) return;
+    if (sub !== 'excluded' || !runId) return;
     void api(base + '/tender/excluded').then(setExcluded).catch((e: Error) => notify('读取已排除条款失败：' + e.message));
-  }, [view, runId, base]);
+  }, [sub, runId, base]);
   const review: ReviewFn = async (key, body) => {
     try {
       const b: Bundle = await api(`${base}/tender/clauses/${key}`, { method: 'PATCH', body });
       setData(b);
-      if (view === 'excluded') setExcluded(await api(base + '/tender/excluded'));
+      if (sub === 'excluded') setExcluded(await api(base + '/tender/excluded'));
       void api(base + '/plan').then((p: { items?: Record<string, unknown>[] }) => { if (p?.items?.length) setPlan(mapPlan(p.items, today)); }).catch(() => undefined);
-      notify(body.isRequirement ? '已保存复核结果' : '已排除，可以在「已排除」里捞回');
+      notify(!body.isRequirement || (body.party && body.party !== 'bidder') ? '已移到「已排除」，需要时可以捞回' : '已保存复核结果');
     } catch (e) { notify('保存失败：' + (e as Error).message); }
   };
   async function parseSample(s: Sample) {
@@ -201,47 +156,46 @@ export function LiveDocs() {
   const r = data.result;
   const s = r.stats;
   const onReview = data.canReview ? review : undefined;
+  const excludedCount = r.judge?.excluded ?? 0;
   return (
-    <div className="p9-docs-live">
-      <section className="p9-card">
-        <header className="p9-card-head">
-          <div className="p9-card-head-left"><FileUp size={14} className="ic-blue" /><h3>{r.packageName}</h3><span className="p9-card-hint">{data.doc?.version} · 规则 v{r.ruleVersion} · {r.createdAt.slice(0, 16).replace('T', ' ')} · 用时 {(r.durationMs / 1000).toFixed(1)} 秒</span></div>
-          <div className="p9-card-head-right">
-            <input ref={reupload} type="file" hidden multiple onChange={e => upload(e.target.files)} />
-            <Btn kind="outline" size="sm" icon={Upload} onClick={() => reupload.current?.click()}>上传新版</Btn>
-            <Btn kind="outline" size="sm" icon={Download} onClick={() => { exportCsv(r); notify('已导出拆标分解表（CSV）'); }}>导出</Btn>
-            <Btn kind="primary" size="sm" icon={Send} disabled={submitted} onClick={() => { setSubmitted(true); notify('已提交 BSD 审核：拆解表版本已锁定，BSD 收到待办'); window.setTimeout(() => setTab('plan'), 900); }}>{submitted ? '已提交 BSD' : '提交 BSD 审核'}</Btn>
-          </div>
-        </header>
-        <div className="tp-kpis p9-docs-kpis">
-          <Kpi label="文件 / 页" value={`${s.files} / ${s.pages}`} />
-          <Kpi label="拆出要求" value={s.items} tone="blue" />
-          <Kpi label="分解条目" value={data.items.length} tone="blue" />
-          <Kpi label="强制 / 否决项" value={s.mandatory} />
-          <Kpi label="高风险" value={s.risks.high} tone={s.risks.high ? 'red' : undefined} />
-          <Kpi label="修订 / 澄清引用" value={r.overrides.length} />
+    <div className="p9-docs-live tb-page">
+      <div className="tb-subtabs">
+        <nav>
+          {([['breakdown', '拆标分解表', data.items.length], ['overview', '解析概况', null], ['excluded', '已排除', excludedCount]] as [Sub, string, number | null][]).map(([k, l, n]) => (
+            <button type="button" key={k} className={sub === k ? 'on' : ''} onClick={() => setSub(k)}>{l}{n !== null && <span>{n}</span>}</button>
+          ))}
+        </nav>
+        <div className="tb-subtabs-right">
+          <span className="tb-subtabs-meta"><FileArchive size={12} /> {r.packageName} · {data.doc?.version} · {r.createdAt.slice(5, 10)} 解析 · {r.judge?.mode === 'model' ? '模型判断' : '规则判断'}</span>
+          <input ref={reupload} type="file" hidden multiple onChange={e => upload(e.target.files)} />
+          <Btn kind="outline" size="sm" icon={Upload} onClick={() => reupload.current?.click()}>上传新版</Btn>
+          <Btn kind="outline" size="sm" icon={Download} onClick={() => { exportCsv(r); notify('已导出拆标分解表（CSV）'); }}>导出</Btn>
+          <Btn kind="primary" size="sm" icon={Send} disabled={submitted} onClick={() => { setSubmitted(true); notify('已提交 BSD 审核：拆解表版本已锁定，BSD 收到待办'); window.setTimeout(() => setTab('plan'), 900); }}>{submitted ? '已提交 BSD' : '提交 BSD 审核'}</Btn>
         </div>
-        <div className="p9-docs-warn"><JudgeNote r={r} /></div>
-        {!!r.warnings.length && <div className="tp-alert orange p9-docs-warn"><div>{r.warnings.map(w => <div key={w}>{w}</div>)}</div></div>}
-      </section>
-      <div className="tp-two"><FilesCard r={r} /><FieldsCard fields={r.fields} /></div>
-      {!!r.overrides.length && <OverridesCard r={r} />}
-      <section className="p9-card">
-        <header className="p9-card-head">
-          <div className="p9-card-head-left"><h3>拆标分解表</h3><span className="p9-card-hint">{data.items.length} 个条目 · {s.items} 条要求 · {data.items.some((i) => i.grouping === 'model') ? '模型按工作项归纳' : '按「类别 + 文件」合并'}，点条目看原始要求</span></div>
-          <div className="p9-card-head-right">
-            <div className="tp-seg">
-              <button type="button" className={view === 'items' ? 'on' : ''} onClick={() => setView('items')}>按条目</button>
-              <button type="button" className={view === 'reqs' ? 'on' : ''} onClick={() => setView('reqs')}>按要求（{s.items}）</button>
-              <button type="button" className={view === 'excluded' ? 'on' : ''} onClick={() => setView('excluded')}>已排除（{r.judge?.excluded ?? 0}）</button>
-            </div>
+      </div>
+      <div className="tb-tabbody">
+        {sub === 'breakdown' && <TenderBreakdown result={r} items={data.items} onReview={onReview} excludedCount={excludedCount} />}
+        {sub === 'overview' && (
+          <div className="tb-overview">
+            <section className="p9-card">
+              <header className="p9-card-head"><div className="p9-card-head-left"><FileUp size={14} className="ic-blue" /><h3>解析总结</h3><span className="p9-card-hint">规则 v{r.ruleVersion} · 用时 {(r.durationMs / 1000).toFixed(1)} 秒</span></div></header>
+              <div className="tp-kpis p9-docs-kpis">
+                <Kpi label="文件 / 页" value={`${s.files} / ${s.pages}`} />
+                <Kpi label="我方要求" value={s.items} tone="blue" />
+                <Kpi label="工作项" value={data.items.length} tone="blue" />
+                <Kpi label="强制 / 否决" value={s.mandatory} />
+                <Kpi label="高风险" value={s.risks.high} tone={s.risks.high ? 'red' : undefined} />
+                <Kpi label="修订 / 澄清引用" value={r.overrides.length} />
+              </div>
+              <div className="p9-docs-warn"><JudgeNote r={r} /></div>
+              {!!r.warnings.length && <div className="tp-alert orange p9-docs-warn"><div>{r.warnings.map(w => <div key={w}>{w}</div>)}</div></div>}
+            </section>
+            <div className="tp-two"><FilesCard r={r} /><FieldsCard fields={r.fields} /></div>
+            {!!r.overrides.length && <OverridesCard r={r} />}
           </div>
-        </header>
-        {view === 'items' && <WorkItems items={data.items} result={r} onReview={onReview} />}
-        {view === 'reqs' && <DecompCard r={r} onReview={onReview} />}
-        {view === 'excluded' && <ExcludedCard rows={excluded} onReview={onReview} />}
-        <footer className="p9-card-foot"><span>{TENDER_CATEGORIES.map(c => `${CAT_LABEL[c.key]} ${s.byCategory[c.key]}`).join(' · ')}</span></footer>
-      </section>
+        )}
+        {sub === 'excluded' && <div className="tb-excluded"><ExcludedCard rows={excluded} onReview={onReview} /></div>}
+      </div>
     </div>
   );
 }

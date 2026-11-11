@@ -735,6 +735,15 @@ function syncTenderItems(bid: P9Bid, result: TenderParseResult) {
     const its = w.requirementKeys.map((k) => byKey.get(k)!);
     if (prev) prev.its.push(...its); else plan.push({ w, its });
   }
+  // 人工「移到其他工作项」优先：从原分组挪到指定分组（指定的分组已不存在就留在原处）
+  for (const it of result.items.filter((i) => i.workItemKey)) {
+    const to = plan.find((p) => p.w.key === it.workItemKey);
+    const from = plan.find((p) => p.its.includes(it));
+    if (!to || !from || to === from) continue;
+    from.its.splice(from.its.indexOf(it), 1);
+    to.its.push(it);
+  }
+  for (let i = plan.length - 1; i >= 0; i--) if (!plan[i].its.length) plan.splice(i, 1);
   const groups = new Map(plan.map((p) => [p.w.key, p.its]));
   const meta = new Map(plan.map((p) => [p.w.key, p.w]));
   const existing = new Map(children<BidItem>(bid.id, 'bid_item').filter((x) => x.tenderKey).map((x) => [String(x.tenderKey), x]));

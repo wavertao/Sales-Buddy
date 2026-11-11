@@ -14,13 +14,15 @@ export const feedbackForBid = (bidId: string) => list<TenderFeedback>('tender_fe
 /** 把一条人工结论应用到结果和已排除列表上，都是原地修改。 */
 function applyOne(r: TenderParseResult, excluded: ExcludedClause[], rules: TenderRuleSet, f: TenderFeedback) {
   const at = r.items.findIndex((i) => i.clauseKey === f.clauseKey);
-  const human = { source: 'human' as const, needsReview: undefined, reviewReasons: undefined, reason: f.note || undefined };
-  if (!f.isRequirement) {
+  const human = { source: 'human' as const, needsReview: undefined, reviewReasons: undefined, reason: f.note || undefined, workItemKey: f.workItemKey };
+  // 判为不是要求、或归业主 / 其他承包商，都移出我方分解表，原因写明归谁
+  const others = f.party === 'owner' ? '业主的责任' : f.party === 'other' ? '其他承包商的责任' : '';
+  if (!f.isRequirement || others) {
     if (at < 0) return;
     const [it] = r.items.splice(at, 1);
     excluded.unshift({
       clauseKey: f.clauseKey, text: it.text, fileId: it.fileId, fileName: it.fileName, fileRole: it.fileRole, section: it.section, page: it.page,
-      reason: `人工排除${f.note ? `：${f.note}` : ''}`, score: it.score, amended: it.amended, ruleCategory: it.ruleCategory, ruleStrength: it.ruleStrength,
+      reason: `人工判定：${others || '不是要求'}${f.note ? `（${f.note}）` : ''}`, score: it.score, amended: it.amended, ruleCategory: it.ruleCategory, ruleStrength: it.ruleStrength,
     });
     return;
   }

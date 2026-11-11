@@ -131,6 +131,8 @@ export interface DecompItem {
   needsReview?: boolean; reviewReasons?: string[];
   /** 规则原本的判断，模型改过时用来对照 */
   ruleCategory?: TenderCategory; ruleStrength?: Strength;
+  /** 人工指定的所属工作项，优先于模型归纳 */
+  workItemKey?: string;
 }
 export type JudgeSource = 'model' | 'rule' | 'mock' | 'human';
 /** 工作项：一组服务于同一交付物的要求。model = 模型归纳，fallback = 按「类别 + 文件」兜底分组 */
@@ -140,7 +142,13 @@ export interface TenderWorkItem {
   requirementKeys: string[]; source: 'model' | 'fallback';
 }
 /** 人工改判：同一投标下按 clauseKey 记一条，重传新版后继续生效；也是后续自进化的标准答案。 */
-export interface ClauseReview { isRequirement: boolean; category?: TenderCategory; strength?: Strength; note?: string }
+export interface ClauseReview {
+  isRequirement: boolean; category?: TenderCategory; strength?: Strength; note?: string;
+  /** 归他方：业主或其他承包商的责任，移出我方分解表 */
+  party?: 'bidder' | 'owner' | 'other';
+  /** 移到指定工作项（工作项的 key，即分解条目的 tenderKey） */
+  workItemKey?: string;
+}
 export interface TenderFeedback extends ClauseReview {
   bidId: string; clauseKey: string; text: string; fileName: string; section: string;
   before: { isRequirement: boolean; category?: TenderCategory; strength?: Strength; source?: JudgeSource };

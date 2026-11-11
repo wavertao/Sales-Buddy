@@ -8,7 +8,7 @@ import { loadBundle, loadList } from './live';
 export type View = 'list' | 'opp' | 'detail' | 'mobile';
 export type Tab = 'cockpit' | 'basic' | 'strategy' | 'plan' | 'docs' | 'meetings' | 'files' | 'todos' | 'submit' | 'bafo' | 'review';
 export const TABS: [Tab, string, boolean?][] = [
-  ['cockpit', '驾驶舱'], ['basic', '基本信息'], ['strategy', '投标策略'], ['plan', '计划', true], ['docs', '招标文件'],
+  ['cockpit', '驾驶舱'], ['basic', '基本信息'], ['strategy', '投标策略'], ['plan', '计划', true], ['docs', '标书拆解'],
   ['meetings', '会议', true], ['files', '文件'], ['todos', '待办与澄清'], ['submit', '交标与结果'], ['bafo', 'BAFO 对比'], ['review', '定标复盘'],
 ];
 export type Modal = null | { kind: 'create' } | { kind: 'created'; number: string } | { kind: 'complete'; todoId: string } | { kind: 'comment'; todoId: string } | { kind: 'advance' } | { kind: 'rollback'; to: number } | { kind: 'round'; dir: 'next' | 'back' } | { kind: 'clarComment'; clarId: string };

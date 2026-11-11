@@ -89,6 +89,8 @@ const clauseReviewSchema = z.object({
   category: z.enum(['technical', 'delivery', 'price', 'commercial', 'deviation']).optional(),
   strength: z.enum(['prohibited', 'mandatory', 'required', 'recommended']).optional(),
   note: z.string().max(300).optional(),
+  party: z.enum(['bidder', 'owner', 'other']).optional(),
+  workItemKey: z.string().max(200).optional(),
 });
 r.get('/bids/:id/tender/excluded', (req, res) => res.json(S.tenderExcluded(u(req, res), req.params.id)));
 r.patch('/bids/:id/tender/clauses/:key', (req, res) => res.json(S.reviewTenderClause(u(req, res), req.params.id, req.params.key, parse(clauseReviewSchema, req.body))));
