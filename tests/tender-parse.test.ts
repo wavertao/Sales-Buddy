@@ -398,3 +398,31 @@ test('TENDER-06 强度分层：shall / 应当 只算一般要求，must / 必须
   assert.equal(tag('投标人必须提供电芯原厂授权书，并加盖公章。'), 'mandatory');
   assert.equal(tag('投标报价高于最高投标限价的，作废标处理。'), 'prohibited');
 });
+
+test('TENDER-16 工作项归纳：条数多时先拟清单再分批分配，不按文件分，漏分的进「其他」', async () => {
+  const { makeGrouper } = await import('../apps/server/src/tender/workitems.ts');
+  // 250 条技术要求散在 5 个文件里，同一件事跨文件出现
+  const items = Array.from({ length: 250 }, (_, n) => ({
+    id: `T${n}`, clauseKey: `k${n}`, no: n, category: 'technical', fileName: `F${n % 5}.pdf`, section: `S${n}`,
+    title: n % 2 ? `PPC 通信接口要求 ${n}` : `消防系统要求 ${n}`, summary: n % 2 ? `PPC 通信接口要求 ${n}` : `消防系统要求 ${n}`, strength: 'required',
+  })) as any[];
+  const calls: string[] = [];
+  const grouper = makeGrouper(async (system, user) => {
+    calls.push(system.includes('拟一份工作项清单') ? 'catalog' : 'assign');
+    if (system.includes('拟一份工作项清单')) {
+      assert.equal(user.split('\n').length, 250, '清单这一步看到全部要求');
+      return JSON.stringify({ workItems: [{ title: '编制 PPC 通信接口方案', deliverable: '接口方案', owner: 'SC' }, { title: '编制消防方案', deliverable: '消防方案', owner: 'SC' }] });
+    }
+    const rows = user.split('\n').map((l) => ({ id: l.split(' | ')[0], ppc: l.includes('PPC') }));
+    // 故意漏掉每批最后一条
+    const body = rows.slice(0, -1);
+    return JSON.stringify({ groups: [{ wi: 0, ids: body.filter((r) => r.ppc).map((r) => r.id) }, { wi: 1, ids: body.filter((r) => !r.ppc).map((r) => r.id) }, { wi: 9, ids: ['r1'] }] });
+  }, `fake-${Date.now()}`);
+  const out = await grouper(items, ['Schedule 18 Technical'], () => {});
+  assert.deepEqual(calls.sort(), ['assign', 'assign', 'assign', 'catalog']);
+  const titles = out.map((w) => w.title);
+  assert.deepEqual(titles, ['编制 PPC 通信接口方案', '编制消防方案', '其他技术要求']);
+  assert.equal(out.reduce((s, w) => s + w.requirementKeys.length, 0), 250, '每条要求分且只分一次');
+  assert.equal(out[2].requirementKeys.length, 3, '每批漏掉的一条进「其他」');
+  assert.ok(out[0].requirementKeys.length > 100, '跨文件的同一件事归到同一个工作项');
+});
