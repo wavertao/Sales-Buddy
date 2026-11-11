@@ -4,7 +4,7 @@ import type {
   TenderCategory, TenderParseResult, TenderProgress, TenderRuleSet, TeamRole,
 } from '../../../../packages/contracts/tender.ts';
 import { TENDER_CATEGORIES } from '../../../../packages/contracts/tender.ts';
-import { extractFile, type Extracted, type SourceFile } from './extract.ts';
+import { extOf, extractFile, HEADING_MARK, newDedupe, type Extracted, type SourceFile } from './extract.ts';
 import { clauseKey, type Candidate, type JudgeOutcome, type JudgeRunner } from './judge.ts';
 import { mergeVerdict, type Merged } from './merge.ts';
 
@@ -51,10 +51,12 @@ export function compile(rules: TenderRuleSet) {
 // ---------- 2 文件角色 ----------
 function classifyRole(c: Compiled, f: Extracted): { role: FileRole; label: string; score: number; precedence: number; extract: boolean } {
   const head = f.pages.slice(0, 2).map((p) => p.text).join('\n').slice(0, 8000);
+  // 整包里的文件夹名（如「A.2 SLD」「Appendix B - Returnable Schedules」）也说明了文件是什么
+  const folder = f.path.split('/').slice(0, -1).join('/');
   let best = { role: 'other' as FileRole, label: '其他', score: 0, precedence: 25, extract: true };
   for (const { rule, names, kws } of c.roles) {
     let score = 0;
-    for (const re of names) if (re.test(f.name)) score += 3;
+    for (const re of names) { if (re.test(f.name)) score += 3; else if (folder && re.test(folder)) score += 2; }
     for (const re of kws) { re.lastIndex = 0; if (re.test(head)) score += 1; }
     if (score > best.score || (score === best.score && score > 0 && rule.precedence > best.precedence)) {
       best = { role: rule.role, label: rule.label, score, precedence: rule.precedence, extract: rule.extractClauses };
@@ -67,7 +69,7 @@ function classifyRole(c: Compiled, f: Extracted): { role: FileRole; label: strin
 type Section = { title: string; number?: string; page: number };
 type Clause = { text: string; page: number; section: Section };
 
-const ENUM_START = /^\s*(\(?[a-zA-Z]\)|\(?[ivxIVX]{1,4}\)|\(\d{1,2}\)|（\d{1,2}）|\d{1,2}[)、]|[•●▪◆■]\s|-\s)/;
+const ENUM_START = /^\s*(\(?[a-zA-Z]\)|\(?[ivxIVX]{1,4}\)|\(\d{1,2}\)|（\d{1,2}）|\d{1,2}[)、]|[•●▪◆■]\s|-\s|o\s+(?=[A-Z]))/;
 const SENTENCE_SPLIT = /(?<=[。；;！？])|(?<=\.)\s+(?=[A-Z(])/u;
 
 function sectionNumber(title: string): string | undefined {
@@ -90,6 +92,10 @@ export function segment(c: Compiled, pages: { page: number; text: string }[]): {
   let section: Section = { title: '（文首）', page: pages[0]?.page ?? 1 };
   let buf = '';
   let bufPage = section.page;
+  // 「The Supplier must:」后面跟一串列表项：列表项单看没有主语和情态词，带上这句引导语才判得出强度
+  let lead: string | undefined;
+  let bufEnum = false;
+  const LEAD_CAP = 160;
 
   const pushPiece = (text: string, page: number) => {
     const t = text.replace(/\s+/g, ' ').trim();
@@ -101,26 +107,37 @@ export function segment(c: Compiled, pages: { page: number; text: string }[]): {
   };
   const flush = () => {
     if (!buf.trim()) { buf = ''; return; }
-    if (buf.length <= max) pushPiece(buf, bufPage);
+    const prefix = bufEnum && lead ? lead + ' ' : '';
+    if (buf.length <= max) pushPiece(prefix + buf, bufPage);
     else {
       let cur = '';
       for (const s of buf.split(SENTENCE_SPLIT)) {
-        if (cur.length + s.length > max && cur) { pushPiece(cur, bufPage); cur = ''; }
+        if (cur.length + s.length > max && cur) { pushPiece(prefix + cur, bufPage); cur = ''; }
         cur += s;
       }
-      pushPiece(cur.slice(0, max * 2), bufPage);
+      pushPiece(prefix + cur.slice(0, max * 2), bufPage);
+    }
+    // 普通段落以冒号结尾就是新的引导语；普通段落不以冒号结尾，说明列表结束了
+    if (!bufEnum) {
+      const tail = buf.trim().split(SENTENCE_SPLIT).pop()!.trim();
+      lead = /[:：]$/.test(tail) ? tail.slice(-LEAD_CAP) : undefined;
     }
     buf = '';
+    bufEnum = false;
   };
 
   for (const p of pages) {
     for (const raw of p.text.split(/\n/)) {
-      const line = raw.replace(/\s+/g, ' ').trim();
+      // 抽取层已认出的标题（Word 标题样式）直接当章节标题
+      const marked = raw.startsWith(HEADING_MARK);
+      const line = raw.replace(HEADING_MARK, '').replace(/\s+/g, ' ').trim();
       if (!line) { flush(); continue; }
       if (/^(page\s*)?\d{1,4}(\s*(of|\/)\s*\d{1,4})?$/i.test(line) || /^第\s*\d+\s*页/.test(line)) continue; // 页码行
-      const isHeading = line.length <= 120 && c.headings.some((h) => h.re.test(line));
+      if (/(\.{5,}|…{3,}|·{5,})\s*\d{1,4}\s*$/.test(line)) continue; // 目录行（点引导线 + 页码）
+      const isHeading = line.length <= 120 && (marked || c.headings.some((h) => h.re.test(line)));
       if (isHeading) {
         flush();
+        lead = undefined;
         section = { title: line.slice(0, 90), number: sectionNumber(line), page: p.page };
         sections.push(section);
         bufPage = p.page;
@@ -128,10 +145,11 @@ export function segment(c: Compiled, pages: { page: number; text: string }[]): {
         const clauseLike = line.length > 50 || /[。；;]$/.test(line);
         if (!clauseLike) continue;
       }
-      if (ENUM_START.test(line)) { flush(); bufPage = p.page; }
+      if (ENUM_START.test(line)) { flush(); bufPage = p.page; bufEnum = true; }
       if (!buf) bufPage = p.page;
-      buf = joinLine(buf.replace(/\n$/, ''), line);
-      if (/[。；;]$/.test(line) && buf.length >= min) flush();
+      buf = joinLine(buf, line);
+      // 没有句末标点的长段（数据表、图纸文字）也要及时切，否则缓冲区越拼越长，整段耗时会平方增长
+      if ((/[。；;]$/.test(line) && buf.length >= min) || buf.length > max * 4) flush();
     }
   }
   flush();
@@ -139,6 +157,12 @@ export function segment(c: Compiled, pages: { page: number; text: string }[]): {
 }
 
 // ---------- 4 条款打标 ----------
+/** 强制项没命中任何分类词时的兜底类别：按所在文件的性质 */
+const ROLE_DEFAULT_CATEGORY: Record<FileRole, TenderCategory> = {
+  technical_spec: 'technical', drawing: 'technical', boq: 'price',
+  notice: 'commercial', itb: 'commercial', contract: 'commercial', amendment: 'commercial', clarification: 'commercial',
+  form: 'commercial', integrity: 'commercial', result: 'commercial', reference: 'technical', other: 'commercial',
+};
 function countHits(re: RegExp, text: string, cap = 3): number {
   re.lastIndex = 0;
   let n = 0;
@@ -175,7 +199,7 @@ function normalizeDate(v: string): string {
   if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
   m = v.match(/(\d{1,2})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{4})/);
   if (m) return `${m[3]}-${pad(+m[2])}-${pad(+m[1])}`; // 日在前（印度 / 英式）
-  m = v.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3})[a-z]*,?\s+(\d{4})/);
+  m = v.match(/(\d{1,2})\s*(?:st|nd|rd|th)?\s+([A-Za-z]{3})[a-z]*,?\s+(\d{4})/);
   if (m && MONTHS[m[2].toLowerCase()]) return `${m[3]}-${pad(MONTHS[m[2].toLowerCase()])}-${pad(+m[1])}`;
   m = v.match(/([A-Za-z]{3})[a-z]*\s+(\d{1,2}),\s+(\d{4})/);
   if (m && MONTHS[m[1].toLowerCase()]) return `${m[3]}-${pad(MONTHS[m[1].toLowerCase()])}-${pad(+m[2])}`;
@@ -229,9 +253,11 @@ function summarizeFields(c: Compiled, hits: FieldHit[]): FieldSummary[] {
       v.files.add(h.fileName); v.count++; v.prec = Math.max(v.prec, h.precedence);
       byVal.set(h.normalized, v);
     }
-    const vals = [...byVal.values()].sort((a, b) => b.count - a.count);
-    // 采用值：效力最高的文件里出现次数最多的那个值
-    const adopted = [...vals].sort((a, b) => b.prec - a.prec || b.count - a.count)[0];
+    const vals = [...byVal.values()].sort((a, b) => b.count - a.count || b.prec - a.prec);
+    // 采用值：修订 / 澄清（效力 ≥80）给出的值优先；否则取出现最多的值。
+    // 不按「规范 > 正文」取：规范里多是单台设备、单个场站的分项数字，项目总量在正文和应答表里反复出现
+    const amended = vals.filter((v) => v.prec >= 80).sort((a, b) => b.prec - a.prec || b.count - a.count);
+    const adopted = amended[0] || vals[0];
     const top = vals[0];
     let status: FieldSummary['status'] = 'single';
     if (vals.length > 1) {
@@ -239,7 +265,8 @@ function summarizeFields(c: Compiled, hits: FieldHit[]): FieldSummary[] {
       if (adopted.prec >= 80 && vals.some((v) => v !== adopted && v.prec < adopted.prec)) status = 'overridden';
       // 次多值也反复出现（≥2 次且不少于最多值的 30%）才算矛盾，偶发的分项数字不报
       else if (rule.checkConflict && vals[1].count >= Math.max(2, top.count * 0.3)) status = 'conflict';
-      else status = 'consistent';
+      // 其余取值多是分项（单个集装箱、单个场站），不算矛盾，但也不能叫「一致」
+      else status = 'multiple';
     } else if (top.files.size > 1) status = 'consistent';
     out.push({
       key: rule.key, label: rule.label, unit: rule.unit, value: adopted.value, source: [...adopted.files][0],
@@ -323,11 +350,15 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
   const warnings: string[] = [];
 
   // 1 抽取
+  // 整包里常见「文件夹 + 同内容的压缩包」：先抽散文件，压缩包里内容完全相同的文件跳过
   const extracted: Extracted[] = [];
-  for (const [i, f] of files.entries()) {
+  const dedupe = newDedupe();
+  const ordered = [...files].sort((a, b) => Number(extOf(a.name) === 'zip') - Number(extOf(b.name) === 'zip'));
+  for (const [i, f] of ordered.entries()) {
     progress({ stage: 'extract', done: i, total: files.length, message: `抽取 ${f.name}` });
-    extracted.push(...(await extractFile(f, maxPagesPerFile, minCharsPerPage)));
+    extracted.push(...(await extractFile(f, maxPagesPerFile, minCharsPerPage, dedupe)));
   }
+  if (dedupe.skipped) warnings.push(`有 ${dedupe.skipped} 个文件内容重复（多为压缩包里和包外的同一文件），只解析了一次`);
 
   // 2 角色 + 3 切分
   type Work = { file: ParsedFile; ex: Extracted; extract: boolean; clauses: Clause[]; sections: Section[] };
@@ -357,7 +388,8 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
   let overrides: OverrideLink[] = [];
   for (const w of work) {
     const pages = w.ex.pages.filter((p) => p.text.trim());
-    fieldHits.push(...extractFields(c, w.file, pages));
+    // 图纸、报价表、参考资料只登记：里面的数字多是分项参数，取关键字段会把采用值带偏
+    if (w.extract) fieldHits.push(...extractFields(c, w.file, pages));
     overrides.push(...findOverrides(w.file, w.file.role, pages, sectionIndex));
   }
   if (overrides.length > MAX_OVERRIDES) { warnings.push(`修订 / 澄清引用 ${overrides.length} 处，只展示前 ${MAX_OVERRIDES} 处`); overrides = overrides.slice(0, MAX_OVERRIDES); }
@@ -367,9 +399,12 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
   // 4 条款打标 → 拆标分解表
   const deadlineIso = deadlineOf(fields);
   const rows = work.flatMap((w) => w.clauses.map((cl) => {
-    const tag = tagClause(c, cl.text, cl.section.title);
-    const strong = tag.strength === 'mandatory' || tag.strength === 'prohibited' || tag.strength === 'required';
-    const keep = tag.risks.length > 0 || (strong && tag.score >= minCategoryScore) || (w.file.role === 'clarification' && tag.score >= minCategoryScore);
+    const raw = tagClause(c, cl.text, cl.section.title);
+    // 强制和否决不能因为没命中分类词就丢（如「The Proposal must be submitted via Aconex」），按文件类型给个默认类别
+    const hard = raw.strength === 'mandatory' || raw.strength === 'prohibited';
+    const tag = { ...raw, category: raw.category || (hard ? ROLE_DEFAULT_CATEGORY[w.file.role] : undefined) };
+    const strong = hard || tag.strength === 'required';
+    const keep = tag.risks.length > 0 || hard || (strong && tag.score >= minCategoryScore) || (w.file.role === 'clarification' && tag.score >= minCategoryScore);
     return { w, cl, tag, keep, clauseKey: clauseKey(cl.text), ruleRisks: tag.risks.map((r) => ({ label: r.label, severity: r.severity, advice: r.advice })) };
   }));
   // 候选比规则的进表条件宽得多：有任何信号就交给模型，规则不再替人把条款删掉

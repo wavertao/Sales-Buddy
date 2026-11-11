@@ -107,7 +107,7 @@ export interface FieldSummary {
   /** 按效力顺序取的采用值 */
   value: string; source: string;
   values: { normalized: string; value: string; files: string[] }[];
-  status: 'single' | 'consistent' | 'overridden' | 'conflict';
+  status: 'single' | 'consistent' | 'multiple' | 'overridden' | 'conflict';
 }
 export interface OverrideLink {
   fileId: string; fileName: string; role: FileRole; page: number;

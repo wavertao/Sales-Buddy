@@ -288,6 +288,48 @@ test('TENDER-13 人工复核：改判、排除、捞回同步分解条目，重�
   assert.throws(() => S.reviewTenderClause(rep.x, rep.b.id, 'any', { isRequirement: false }), /主管或管理员/);
 });
 
+test('TENDER-14 真实整包的坑：压缩包重复、纯数字数据表、文件夹定角色、序数日期、引导语列表、目录行', async () => {
+  const sheet = (rows: string[][]) => {
+    const z = new JSZip();
+    z.file('xl/workbook.xml', '<workbook><sheets><sheet name="Data" sheetId="1"/></sheets></workbook>');
+    z.file('xl/worksheets/sheet1.xml', `<worksheet><sheetData>${rows.map((r) => `<row>${r.map((c) => (/^[\d.]+$/.test(c) ? `<c><v>${c}</v></c>` : `<c t="inlineStr"><is><t>${c}</t></is></c>`)).join('')}</row>`).join('')}</sheetData></worksheet>`);
+    return z.generateAsync({ type: 'uint8array' });
+  };
+  const data = await sheet([['Time', 'AmbientTemp'], ...Array.from({ length: 3000 }, (_, i) => [String(44099 + i / 100), '25.3'])]);
+  const rfp = `Bungaban BESS RFP
+Contents
+2.1 BESS Supply Agreement Scope ............................................ 7
+Non-Binding RFP Closing Time: 5pm (AEST), Friday 16 th October 2026
+3.5 Submission of Proposal
+1. The Proposal must be submitted electronically via Aconex to the Company.
+The Supplier must:
+• comply with the offtake agreement to the extent required by the Supply Contract;
+• provide all reasonable assistance during hold point testing.`;
+  const zip = new JSZip();
+  zip.file('Appendices/A.8 Site Conditions/Temperature.xlsx', data);
+  zip.file('Appendices/BESS Tender.txt', rfp);
+  const files = [
+    txt('BESS Tender.txt', rfp),
+    { name: 'Temperature.xlsx', path: 'Appendix A - Company Supplied Information/A.8 Site Conditions/Temperature.xlsx', bytes: data },
+    { name: 'BUNW-YUR-ELE-GEN-109002_B.txt', path: 'Appendix A - Company Supplied Information/A.5 Indicative BESS Yard GA/BUNW-YUR-ELE-GEN-109002_B.txt', bytes: new TextEncoder().encode('Container 5.1 MWh. General arrangement notes for the BESS yard.') },
+    { name: 'Appendices.zip', path: 'Appendices.zip', bytes: await zip.generateAsync({ type: 'uint8array' }) },
+  ];
+  const t0 = Date.now();
+  const r = await parsePackage(rules(), '包', files, 'upload');
+  assert.ok(Date.now() - t0 < 5000, '大数据表不能拖慢整包');
+  assert.ok(r.warnings.some((w) => w.includes('2 个文件内容重复')), '压缩包里和包外相同的文件只解析一次');
+  assert.equal(r.files.length, 3);
+  const temp = r.files.find((f) => f.name === 'Temperature.xlsx')!;
+  assert.ok(temp.chars < 200 && temp.note?.includes('纯数字'), '纯数字行跳过');
+  assert.equal(r.files.find((f) => f.name.startsWith('BUNW-YUR'))!.role, 'drawing', '文件夹名「…GA」说明是图纸');
+  assert.equal(r.fields.find((f) => f.key === 'deadline')?.values[0].normalized, '2026-10-16', '「16 th October 2026」这类序数日期');
+  assert.ok(!r.fields.find((f) => f.key === 'energy'), '图纸里的分项参数不进关键字段');
+  assert.ok(r.items.some((i) => i.text.includes('Aconex') && i.strength === 'mandatory'), '没有分类词的强制项也要进表');
+  const bullet = r.items.find((i) => i.text.includes('hold point testing'))!;
+  assert.ok(bullet.text.startsWith('The Supplier must:') && bullet.strength === 'mandatory', '列表项带上引导语');
+  assert.ok(!r.items.some((i) => i.text.includes('......')), '目录行不当条款');
+});
+
 test('TENDER-06 强度分层：shall / 应当 只算一般要求，must / 必须 才算强制，废标 / rejected 算否决', () => {
   const tag = (s: string) => previewText(rules(), `第一章 技术要求\n1.1 ${s}`).clauses[0]?.strength;
   assert.equal(tag('The Supplier shall supply the BESS within 11 months of the effective date.'), 'required');

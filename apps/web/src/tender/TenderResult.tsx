@@ -14,7 +14,7 @@ export const STRENGTH_LABEL: Record<Strength, string> = { prohibited: '禁止 / 
 export const SEV_LABEL: Record<Severity, string> = { high: '高', medium: '中', low: '低' };
 export const STATUS_LABEL: Record<string, string> = { ok: '已解析', partial_scanned: '部分无文字层', scanned: '扫描件', unsupported: '不支持', error: '读取失败' };
 export const FIELD_STATUS: Record<FieldSummary['status'], [string, string]> = {
-  single: ['单一来源', 'gray'], consistent: ['多处一致', 'green'], overridden: ['已被修订', 'blue'], conflict: ['待核对', 'orange'],
+  single: ['单一来源', 'gray'], consistent: ['多处一致', 'green'], multiple: ['多个取值', 'gray'], overridden: ['已被修订', 'blue'], conflict: ['待核对', 'orange'],
 };
 export const fmtSize = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 export const SOURCE_LABEL: Record<JudgeSource, string> = { model: '模型', rule: '规则', mock: '测试判断', human: '人工' };

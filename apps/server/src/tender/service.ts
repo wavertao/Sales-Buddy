@@ -32,18 +32,22 @@ export function listSamples() {
   const root = sampleRoot();
   if (!existsSync(root)) return { root, packages: [] as { id: string; name: string; kind: 'single' | 'package'; files: number; size: number }[] };
   const packages: { id: string; name: string; kind: 'single' | 'package'; files: number; size: number }[] = [];
+  const pushPackage = (p: string, name: string) => {
+    const files = walk(p);
+    packages.push({ id: relative(root, p).split(sep).join('/'), name, kind: 'package', files: files.length, size: files.reduce((s, f) => s + statSync(f).size, 0) });
+  };
   const bundles = join(root, '整包');
   if (existsSync(bundles)) {
     for (const name of readdirSync(bundles).sort()) {
       const p = join(bundles, name);
-      if (!statSync(p).isDirectory()) continue;
-      const files = walk(p);
-      packages.push({ id: relative(root, p).split(sep).join('/'), name, kind: 'package', files: files.length, size: files.reduce((s, f) => s + statSync(f).size, 0) });
+      if (statSync(p).isDirectory()) pushPackage(p, name);
     }
   }
+  // 根目录下直接放的文件夹也当一个整包（真实项目常直接把下载的整包目录丢进来）
   for (const name of readdirSync(root).sort()) {
     const p = join(root, name);
-    if (statSync(p).isDirectory() || SKIP.test(name) || name.endsWith('.partial') || name.endsWith('.md')) continue;
+    if (statSync(p).isDirectory()) { if (name !== '整包') pushPackage(p, name); continue; }
+    if (SKIP.test(name) || name.endsWith('.partial') || name.endsWith('.md')) continue;
     packages.push({ id: name, name, kind: 'single', files: 1, size: statSync(p).size });
   }
   return { root, packages };
