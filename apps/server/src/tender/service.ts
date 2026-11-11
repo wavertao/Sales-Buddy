@@ -1,6 +1,7 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
-import { get, list, now, put, uid } from '../db.ts';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import JSZip from 'jszip';
+import { dbPath, get, list, now, put, uid } from '../db.ts';
 import { AppError } from '../../../../packages/contracts/index.ts';
 import type { TenderJob, TenderParseResult, TenderProgress } from '../../../../packages/contracts/tender.ts';
 import { modelStatus } from '../model.ts';
@@ -73,18 +74,73 @@ type RunIndex = Pick<TenderParseResult, 'id' | 'packageName' | 'source' | 'creat
 
 type OnProgress = (p: TenderProgress) => void;
 
-async function run(by: string, name: string, files: SourceFile[], source: 'sample' | 'upload', onProgress?: OnProgress) {
+/** 上传的原文件存在数据目录（和数据库同级，Git 忽略），按解析记录分目录，相对路径不变 */
+const uploadRoot = (runId: string) => join(dirname(dbPath), 'tender-uploads', runId);
+const safeSegments = (path: string) => path.split(/[\\/]/).filter((s) => s && s !== '.' && s !== '..');
+
+async function run(by: string, name: string, files: SourceFile[], source: 'sample' | 'upload', onProgress?: OnProgress, sampleId?: string) {
   const rules = getRules();
   // 没配模型就走规则，结果上会明确标「未经模型复核」
   const judge = rules.judge.enabled && modelStatus().configured ? makeJudge() : undefined;
   const result = await parsePackage(rules, name, files, source, { judge, onProgress, onExcluded: (runId, excluded) => put('tender_excluded', runId, excluded) });
+  if (sampleId) result.sampleId = sampleId;
+  if (source === 'upload') {
+    for (const f of files) {
+      const target = join(uploadRoot(result.id), ...safeSegments(f.path || f.name));
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, f.bytes);
+    }
+  }
   put('tender_runs', result.id, result);
   const idx: RunIndex = { id: result.id, packageName: result.packageName, source, createdAt: result.createdAt, durationMs: result.durationMs, ruleVersion: result.ruleVersion, stats: result.stats, by };
   put('tender_run_index', result.id, idx);
   return result;
 }
 
-export const parseSample = (by: string, id: string, onProgress?: OnProgress) => { const s = loadSample(id); return run(by, s.name, s.files, 'sample', onProgress); };
+export const parseSample = (by: string, id: string, onProgress?: OnProgress) => { const s = loadSample(id); return run(by, s.name, s.files, 'sample', onProgress, id); };
+
+const MIME: Record<string, string> = {
+  pdf: 'application/pdf', txt: 'text/plain; charset=utf-8', md: 'text/plain; charset=utf-8', csv: 'text/csv; charset=utf-8',
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xlsm: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+  zip: 'application/zip', kmz: 'application/vnd.google-earth.kmz', dwg: 'application/acad',
+};
+/** 浏览器能直接看的就在新标签页打开，其余下载 */
+const INLINE = new Set(['pdf', 'txt', 'md', 'csv', 'jpg', 'jpeg', 'png', 'gif', 'webp']);
+
+/**
+ * 读一次解析里某个文件的原始内容：样本从样本库读，上传的从数据目录读；压缩包里的文件现解压。
+ * 路径都限制在各自根目录内。
+ */
+export async function readRunFile(runId: string, fileId: string) {
+  const r = getRun(runId);
+  const f = r.files.find((x) => x.id === fileId);
+  if (!f) throw new AppError('NOT_FOUND', '解析记录里没有这个文件', 404);
+  let root: string;
+  if (r.sampleId) root = resolve(sampleRoot(), r.sampleId);
+  else if (r.source === 'upload') root = uploadRoot(r.id);
+  else throw new AppError('NOT_FOUND', '这次解析没有保存原文件，重新解析一次后可以打开', 404);
+  if (!existsSync(root)) throw new AppError('NOT_FOUND', '原文件已不在，重新上传后可以打开', 404);
+  const segs = safeSegments(f.path || f.name);
+  let bytes: Uint8Array | undefined;
+  if (statSync(root).isFile()) bytes = new Uint8Array(readFileSync(root));
+  else {
+    const direct = join(root, ...segs);
+    if (!direct.startsWith(root + sep)) throw new AppError('INVALID_ARGUMENT', '文件路径不合法', 400);
+    if (existsSync(direct) && statSync(direct).isFile()) bytes = new Uint8Array(readFileSync(direct));
+    // 压缩包里的文件：路径是「包路径/内部路径」，从后往前找到压缩包再解压
+    for (let i = segs.length - 1; !bytes && i >= 1; i--) {
+      const zipPath = join(root, ...segs.slice(0, i));
+      if (!/\.zip$/i.test(zipPath) || !existsSync(zipPath) || !statSync(zipPath).isFile()) continue;
+      const entry = (await JSZip.loadAsync(readFileSync(zipPath))).file(segs.slice(i).join('/'));
+      if (entry) bytes = await entry.async('uint8array');
+    }
+  }
+  if (!bytes) throw new AppError('NOT_FOUND', '原文件已不在，重新上传后可以打开', 404);
+  const ext = f.ext.toLowerCase();
+  return { name: f.name, bytes, mime: MIME[ext] || 'application/octet-stream', inline: INLINE.has(ext) };
+}
 export const parseUpload = (by: string, name: string, files: SourceFile[], onProgress?: OnProgress) => {
   if (!files.length) throw new AppError('INVALID_ARGUMENT', '请至少上传一个文件', 400);
   return run(by, name || files[0].name, files, 'upload', onProgress);

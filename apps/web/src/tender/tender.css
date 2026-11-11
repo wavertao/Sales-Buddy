@@ -226,3 +226,9 @@
   .tp-flow { flex-wrap: wrap; } .tp-flow-arrow { display: none; }
   .tp-rule-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* 解析覆盖与文件链接 */
+.tp-coverage { font-size: 12.5px; color: #1F2329; line-height: 1.6; }
+.tp-filelink { border: 0; padding: 0; background: none; color: var(--primary, #1D4ED8); cursor: pointer; font: inherit; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-filelink:hover { text-decoration: underline; }
+.tp-files .tp-file { max-width: 420px; }

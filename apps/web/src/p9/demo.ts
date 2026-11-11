@@ -221,7 +221,9 @@ export const FOLDERS: { name: string; count: number; subs?: [string, number][] }
   { name: '投标文件', count: 6, subs: [['商务标', 2], ['技术标', 2], ['报价文件', 1], ['资质业绩', 1]] },
   { name: '会议文档', count: 7 }, { name: '澄清材料', count: 3 }, { name: '招标文件原件', count: 2 },
 ];
-export interface FileRow { name: string; type: string; v: string; size: string; who: string; time: string; status: '进行中' | '历史' | '已归档'; folder: string; sub?: string; kind: 'doc' | 'xls' | 'pdf' }
+export interface FileRow { name: string; type: string; v: string; size: string; who: string; time: string; status: '进行中' | '历史' | '已归档'; folder: string; sub?: string; kind: 'doc' | 'xls' | 'pdf';
+  /** 招标文件解析里的原文件，可以点开 */
+  fileId?: string; note?: string }
 export const FILES: FileRow[] = [
   { name: '商务标 v2.docx', type: '投标文件', v: 'v2', size: '4.2 MB', who: '王芳', time: '10-20 14:20', status: '进行中', folder: '投标文件', sub: '商务标', kind: 'doc' },
   { name: '商务标 v1.docx', type: '投标文件', v: 'v1', size: '3.8 MB', who: '王芳', time: '10-12 09:40', status: '历史', folder: '投标文件', sub: '商务标', kind: 'doc' },

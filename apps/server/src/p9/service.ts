@@ -11,7 +11,7 @@ import { allowedRecord, canAccess } from '../crm.ts';
 import { allRecords, put, record } from '../db.ts';
 import { TENDER_CATEGORIES } from '../../../../packages/contracts/tender.ts';
 import type { ClauseReview, DecompItem, TenderCategory, TenderParseResult, TenderProgress, TenderWorkItem } from '../../../../packages/contracts/tender.ts';
-import { getRun, parseSample, parseUpload, runningJobForBid, startJob } from '../tender/service.ts';
+import { getRun, parseSample, parseUpload, readRunFile, runningJobForBid, startJob } from '../tender/service.ts';
 import { getRules } from '../tender/rules.ts';
 import { applyFeedback, excludedOf, reviewClause } from '../tender/review.ts';
 import { fallbackGroups, makeGrouper, strongestOf, type Grouper } from '../tender/workitems.ts';
@@ -280,9 +280,29 @@ function reopenTaskRecord(bid: P9Bid, task: BidTask, user: User): BidTask {
 }
 
 // ---- 文档 / 会议 / 文件 ---------------------------------------------------------
+/**
+ * 文件列表：招标文件解析不再只登记一条「整包」记录，而是把最新一次解析里的每个文件列进「招标文件原件」，可以点开原文件。
+ * 这些行由解析记录现算，不单独落库；重传新版后自动换成新版的文件。
+ */
+const KB = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 export function listDocs(user: User, id: string) {
-  const bid = loadBid(user, id);
-  return children<BidDoc>(id, 'bid_doc');
+  loadBid(user, id);
+  const docs = children<BidDoc>(id, 'bid_doc');
+  const ver = (d: BidDoc) => Number(String(d.version).replace(/\D/g, '')) || 0;
+  const pkg = docs.filter((d) => d.tenderRunId).sort((a, b) => ver(b) - ver(a))[0];
+  if (!pkg) return docs;
+  let run: TenderParseResult;
+  try { run = getRun(String(pkg.tenderRunId)); } catch { return docs; }
+  const files = run.files.map((f) => ({
+    ...pkg, id: `${pkg.id}-${f.id}`, filename: f.name, size: KB(f.size), status: '进行中',
+    tenderFileId: f.id, tenderPath: f.path, fileRole: f.role, parseNote: f.status === 'ok' ? '' : f.note || f.status,
+  }));
+  return [...docs.filter((d) => !d.tenderRunId), ...files];
+}
+/** 打开最新一次解析里的某个原文件 */
+export async function tenderFile(user: User, bidId: string, fileId: string) {
+  loadBid(user, bidId);
+  return readRunFile(latestRun(bidId).id, fileId);
 }
 export function addDoc(user: User, id: string, body: Record<string, unknown>) {
   const bid = loadBid(user, id);

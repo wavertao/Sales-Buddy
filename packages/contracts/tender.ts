@@ -188,6 +188,10 @@ export interface TenderParseResult {
   schedules?: string[];
   /** 工作项分组；没有时按「类别 + 文件」分组 */
   workItems?: TenderWorkItem[];
+  /** 内容和别的文件完全相同、只解析一次的文件数（多为压缩包里和包外的同一文件） */
+  duplicateFiles?: number;
+  /** 来自样本库时的样本编号，用来打开原文件；上传的原文件另存在数据目录 */
+  sampleId?: string;
 }
 
 /** 规则试跑：贴一段文字，看每条规则命中了什么。 */

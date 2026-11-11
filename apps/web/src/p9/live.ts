@@ -73,7 +73,8 @@ export function mapFiles(rows: Json[]): FileRow[] {
       name, type: d.category || '投标文件', v: d.version || 'v1', size: d.size || '—', who: d.uploader || '—', time: d.updatedLabel || hm(d.updatedAt),
       status: (['进行中', '历史', '已归档'].includes(d.status) ? d.status : '进行中') as FileRow['status'],
       folder: ['会议文档', '澄清材料', '招标文件原件'].includes(d.category) ? d.category : '投标文件', sub: name.startsWith('商务') ? '商务标' : name.startsWith('技术') ? '技术标' : name.startsWith('报价') ? '报价文件' : '资质业绩',
-      kind: name.endsWith('.xlsx') ? 'xls' : name.endsWith('.pdf') ? 'pdf' : 'doc',
+      kind: /\.(xlsx|xlsm|xls|csv)$/i.test(name) ? 'xls' : /\.pdf$/i.test(name) ? 'pdf' : 'doc',
+      fileId: d.tenderFileId || undefined, note: d.parseNote || undefined,
     };
   });
 }

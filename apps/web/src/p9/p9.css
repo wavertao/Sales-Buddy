@@ -922,3 +922,6 @@ button.m9-round { color: var(--text); }
 .p9-tr-btn:hover { background: var(--crm-bg, #F5F6FA); }
 .p9-req-box { padding: 4px 8px 10px 22px; overflow-x: auto; }
 .p9-sample-pick { max-height: 260px; overflow: auto; margin-top: 12px; text-align: left; }
+
+.p9-file-link { border: 0; padding: 0; background: none; color: var(--primary, #1D4ED8); cursor: pointer; font: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.p9-file-link:hover { text-decoration: underline; }

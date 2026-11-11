@@ -1,8 +1,10 @@
 // P9.5 会议：会议清单 · 会议详情（Tab 内二级页）；P9.6 文件：文件夹树 + 版本列表。
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Check, ChevronDown, ChevronRight, FileSpreadsheet, FileText, Folder, FolderOpen, FolderPlus, Mic, Plus, Search, Sparkles, Upload } from 'lucide-react';
 import * as D from '../demo';
 import { useP9 } from '../store';
+import { openTenderFile } from '../../tender/open-file';
+import { mapFiles } from '../live';
 import { Avatar, Btn, Check as Checkbox, Pill, RoundTag, cx } from '../ui';
 import type { Tone } from '../ui';
 
@@ -128,8 +130,12 @@ function NameInput({ value, icon, onDone }: { value: string; icon?: boolean; onD
 }
 
 export function Files() {
-  const { live, notify } = useP9();
-  const files = live?.files.length ? live.files : D.FILES;
+  const { live, notify, bid, api } = useP9();
+  // 进入文件 Tab 时重新取一次：标书拆解里刚解析的文件要能马上看到
+  const [fresh, setFresh] = useState<D.FileRow[] | null>(null);
+  useEffect(() => { if (!live) return; let alive = true; void api('/bids/' + encodeURIComponent(bid.id) + '/files').then((rows: Record<string, unknown>[]) => { if (alive) setFresh(mapFiles(rows)); }).catch(() => undefined); return () => { alive = false; }; }, [bid.id, !!live]);
+  const files = fresh?.length ? fresh : live?.files.length ? live.files : D.FILES;
+  const open = (f: D.FileRow) => { if (f.fileId) void openTenderFile(bid.id, f.fileId, f.name).catch((e: Error) => notify(e.message)); };
   const [folder, setFolder] = useState('投标文件');
   const [sub, setSub] = useState<string | null>(null);
   const [openF, setOpenF] = useState<Set<string>>(new Set(['投标文件']));
@@ -137,6 +143,8 @@ export function Files() {
   const [q, setQ] = useState('');
   const [extra, setExtra] = useState<D.FileRow[]>([]);
   const [folders, setFolders] = useState(D.FOLDERS);
+  // 接了后端时文件夹计数按真实文件算
+  const countOf = (name: string, sub?: string, fallback = 0) => (fresh?.length || live?.files.length ? [...extra, ...files].filter(f => f.folder === name && (!sub || f.sub === sub)).length : fallback);
   const [naming, setNaming] = useState<string | null>(null);
   // 新建文件夹：在当前一级文件夹下建子文件夹（选中「投标文件」时），否则建一级文件夹；建好后进入重命名
   const newFolder = () => {
@@ -170,9 +178,9 @@ export function Files() {
             return (
               <React.Fragment key={f.name}>
                 {naming === f.name ? <NameInput value={f.name} icon onDone={v => rename(f.name, v)} /> : <button type="button" className={cx('p9-tree-row', on && 'is-on')} onClick={() => { setFolder(f.name); setSub(null); setOpenF(s => { const n = new Set(s); n.has(f.name) ? n.delete(f.name) : n.add(f.name); return n; }); }}>
-                  {open ? <FolderOpen size={12} /> : <Folder size={12} />}<span className="p9-grow">{f.name}</span><small>{f.count}</small>{f.subs ? (open ? <ChevronDown size={10} /> : <ChevronRight size={10} />) : <ChevronRight size={10} />}
+                  {open ? <FolderOpen size={12} /> : <Folder size={12} />}<span className="p9-grow">{f.name}</span><small>{countOf(f.name, undefined, f.count)}</small>{f.subs ? (open ? <ChevronDown size={10} /> : <ChevronRight size={10} />) : <ChevronRight size={10} />}
                 </button>}
-                {open && f.subs?.map(([s, n]) => naming === s ? <NameInput key={s} value={s} onDone={v => rename(s, v)} /> : <button type="button" key={s} className={cx('p9-tree-sub is-btn', folder === f.name && sub === s && 'is-on')} onClick={() => { setFolder(f.name); setSub(s); }}><i />{s}<span className="p9-grow" /><small>{n}</small></button>)}
+                {open && f.subs?.map(([s, n]) => naming === s ? <NameInput key={s} value={s} onDone={v => rename(s, v)} /> : <button type="button" key={s} className={cx('p9-tree-sub is-btn', folder === f.name && sub === s && 'is-on')} onClick={() => { setFolder(f.name); setSub(s); }}><i />{s}<span className="p9-grow" /><small>{countOf(f.name, s, n)}</small></button>)}
               </React.Fragment>
             );
           })}
@@ -191,8 +199,8 @@ export function Files() {
         <div className="p9-table" style={{ '--cols': 'minmax(0,1fr) 60px 44px 52px 52px 70px 44px' } as React.CSSProperties}>
           <div className="p9-tr is-head">{['文件名', '类型', '版本', '大小', '上传人', '更新时间', '状态'].map(h => <div key={h} className="p9-th">{h}</div>)}</div>
           {rows.map(f => (
-            <div key={f.name} className="p9-tr is-38">
-              <div className="p9-file-name">{f.kind === 'xls' ? <FileSpreadsheet size={11} className="ic-orange" /> : <FileText size={11} className={f.kind === 'pdf' ? 'ic-green' : 'ic-blue'} />}<span>{f.name}</span></div>
+            <div key={f.fileId || f.name} className="p9-tr is-38">
+              <div className="p9-file-name" title={f.note || undefined}>{f.kind === 'xls' ? <FileSpreadsheet size={11} className="ic-orange" /> : <FileText size={11} className={f.kind === 'pdf' ? 'ic-green' : 'ic-blue'} />}{f.fileId ? <button type="button" className="p9-file-link" onClick={() => open(f)}>{f.name}</button> : <span>{f.name}</span>}</div>
               <div className="p9-td-c is-muted">{f.type}</div>
               <div className="p9-td-c tone-blue is-bold">{f.v}</div>
               <div className="p9-td-c is-muted">{f.size}</div>

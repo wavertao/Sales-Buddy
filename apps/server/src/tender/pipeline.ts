@@ -358,7 +358,6 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
     progress({ stage: 'extract', done: i, total: files.length, message: `抽取 ${f.name}` });
     extracted.push(...(await extractFile(f, maxPagesPerFile, minCharsPerPage, dedupe)));
   }
-  if (dedupe.skipped) warnings.push(`有 ${dedupe.skipped} 个文件内容重复（多为压缩包里和包外的同一文件），只解析了一次`);
 
   // 2 角色 + 3 切分
   type Work = { file: ParsedFile; ex: Extracted; extract: boolean; clauses: Clause[]; sections: Section[] };
@@ -460,10 +459,6 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
   }
   items.forEach((it, i) => { it.no = i + 1; it.id = `R${String(i + 1).padStart(4, '0')}`; });
 
-  for (const w of work) {
-    if (w.file.status === 'scanned') warnings.push(`${w.file.name}：扫描件，未解析（${w.file.pages} 页）`);
-    if (w.file.status === 'unsupported' || w.file.status === 'error') warnings.push(`${w.file.name}：${w.file.note}`);
-  }
   if (!deadlineIso) warnings.push('没有识别到投标截止时间，分解表的倒排截止日留空');
 
   const parsed = work.map((w) => w.file);
@@ -488,7 +483,7 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
       items: items.length, mandatory,
       risks, byCategory, conflicts: fields.filter((f) => f.status === 'conflict').length,
     },
-    warnings, truncated,
+    warnings, truncated, duplicateFiles: dedupe.skipped,
   };
 }
 

@@ -3,9 +3,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CircleCheck, Download, FileArchive, FileUp, FolderInput, FolderOpen, Globe, HardDrive, Info, Loader, Send, Upload } from 'lucide-react';
 import type { ExcludedClause, TenderJob, TenderParseResult, TenderProgress } from '../../../../../packages/contracts/tender';
-import { ExcludedCard, FieldsCard, FilesCard, JudgeNote, Kpi, OverridesCard, fmtSize, type ReviewFn } from '../../tender/TenderResult';
+import { Coverage, ExcludedCard, FieldsCard, FilesCard, JudgeNote, Kpi, OverridesCard, fmtSize, type ReviewFn } from '../../tender/TenderResult';
 import { TenderBreakdown, type WorkItem } from '../../tender/TenderBreakdown';
 import { exportBreakdownXlsx } from '../../tender/export-xlsx';
+import { openTenderFile } from '../../tender/open-file';
 import { mapPlan } from '../live';
 import { useP9 } from '../store';
 import { Btn } from '../ui';
@@ -158,6 +159,7 @@ export function LiveDocs() {
   const s = r.stats;
   const onReview = data.canReview ? review : undefined;
   const excludedCount = r.judge?.excluded ?? 0;
+  const openFile = (fileId: string, name: string) => { void openTenderFile(bid.id, fileId, name).catch((e: Error) => notify(e.message)); };
   return (
     <div className="p9-docs-live tb-page">
       <div className="tb-subtabs">
@@ -188,10 +190,12 @@ export function LiveDocs() {
                 <Kpi label="高风险" value={s.risks.high} tone={s.risks.high ? 'red' : undefined} />
                 <Kpi label="修订 / 澄清引用" value={r.overrides.length} />
               </div>
+              <div className="p9-docs-warn"><Coverage r={r} onOpen={openFile} /></div>
               <div className="p9-docs-warn"><JudgeNote r={r} /></div>
               {!!r.warnings.length && <div className="tp-alert orange p9-docs-warn"><div>{r.warnings.map(w => <div key={w}>{w}</div>)}</div></div>}
             </section>
-            <div className="tp-two"><FilesCard r={r} /><FieldsCard fields={r.fields} /></div>
+            <FieldsCard fields={r.fields} />
+            <FilesCard r={r} onOpen={openFile} />
             {!!r.overrides.length && <OverridesCard r={r} />}
           </div>
         )}

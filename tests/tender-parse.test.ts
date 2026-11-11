@@ -342,7 +342,8 @@ The Supplier must:
   const t0 = Date.now();
   const r = await parsePackage(rules(), '包', files, 'upload');
   assert.ok(Date.now() - t0 < 5000, '大数据表不能拖慢整包');
-  assert.ok(r.warnings.some((w) => w.includes('2 个文件内容重复')), '压缩包里和包外相同的文件只解析一次');
+  assert.equal(r.duplicateFiles, 2, '压缩包里和包外相同的文件只解析一次');
+  assert.ok(!r.warnings.some((w) => w.includes('重复')), '重复文件不再单独提示，记在 duplicateFiles 里');
   assert.equal(r.files.length, 3);
   const temp = r.files.find((f) => f.name === 'Temperature.xlsx')!;
   assert.ok(temp.chars < 200 && temp.note?.includes('纯数字'), '纯数字行跳过');
@@ -425,4 +426,21 @@ test('TENDER-16 工作项归纳：条数多时先拟清单再分批分配，不�
   assert.equal(out.reduce((s, w) => s + w.requirementKeys.length, 0), 250, '每条要求分且只分一次');
   assert.equal(out[2].requirementKeys.length, 7, '每批漏掉的一条进「其他」');
   assert.ok(out[0].requirementKeys.length > 100, '跨文件的同一件事归到同一个工作项');
+});
+
+test('TENDER-17 原文件：上传的文件另存，可按文件编号取回，压缩包里的现解压；路径越界的忽略', async () => {
+  const { parseUpload, readRunFile } = await import('../apps/server/src/tender/service.ts');
+  const zip = new JSZip();
+  zip.file('inner/技术规范.txt', '第一章 技术要求\n1.1 投标人必须提供 UL9540A 报告。');
+  const files = [txt('招标文件正文.txt', '第一章 总则\n1.1 投标人须在截止前提交投标文件。'), { name: 'spec.zip', path: '包/spec.zip', bytes: await zip.generateAsync({ type: 'uint8array' }) }, txt('evil.txt', '投标人应当遵守。')];
+  files[2].path = '../../evil.txt';
+  const r = await parseUpload('tester', '包', files);
+  for (const f of r.files) {
+    const got = await readRunFile(r.id, f.id);
+    assert.ok(got.bytes.length > 0, `${f.path} 能取回`);
+    assert.equal(got.mime, 'text/plain; charset=utf-8');
+  }
+  const inner = r.files.find((f) => f.path.endsWith('技术规范.txt'))!;
+  assert.match(new TextDecoder().decode((await readRunFile(r.id, inner.id)).bytes), /UL9540A/);
+  await assert.rejects(() => readRunFile(r.id, 'F99'), /没有这个文件/);
 });

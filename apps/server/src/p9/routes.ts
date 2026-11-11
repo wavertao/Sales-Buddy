@@ -92,6 +92,13 @@ const clauseReviewSchema = z.object({
   party: z.enum(['bidder', 'owner', 'other']).optional(),
   workItemKey: z.string().max(200).optional(),
 });
+r.get('/bids/:id/tender/files/:fileId', async (req, res) => {
+  const f = await S.tenderFile(u(req, res), req.params.id, req.params.fileId);
+  res.setHeader('Content-Type', f.mime);
+  res.setHeader('Content-Disposition', `${f.inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(f.name)}`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.send(Buffer.from(f.bytes));
+});
 r.get('/bids/:id/tender/excluded', (req, res) => res.json(S.tenderExcluded(u(req, res), req.params.id)));
 r.patch('/bids/:id/tender/clauses/:key', (req, res) => res.json(S.reviewTenderClause(u(req, res), req.params.id, req.params.key, parse(clauseReviewSchema, req.body))));
 r.post('/bids/:id/ai/decompose', async (req, res) => res.json(await S.aiDecomposeRoute(u(req, res), req.params.id, ((req.body as { documentId?: string } | undefined)?.documentId) || undefined)));

@@ -103,21 +103,63 @@ export const FlowStep = ({ n, label, detail, last }: { n: number; label: string;
   </>
 );
 
-export function FilesCard({ r }: { r: TenderParseResult }) {
+/** 没解析出来也不影响拆解的文件：图纸、地图、图片、参考资料一类 */
+const MINOR_ROLES = new Set<FileRole>(['drawing', 'reference', 'other', 'result', 'notice']);
+const MINOR_EXT = /^(jpe?g|png|gif|webp|bmp|tiff?|kmz|kml|dwg|dxf|mp4|mov)$/i;
+const unparsed = (f: TenderParseResult['files'][number]) => f.status === 'scanned' || f.status === 'unsupported' || f.status === 'error';
+const minor = (f: TenderParseResult['files'][number]) => MINOR_ROLES.has(f.role) || MINOR_EXT.test(f.ext);
+const fix = (f: TenderParseResult['files'][number]) => (f.status === 'scanned' ? '扫描件，需要 OCR，或向招标方要可编辑版' : f.status === 'error' ? '文件读取失败，请检查文件是否损坏' : '格式不支持，建议另存为 PDF 或 Word 再传');
+
+/**
+ * 解析覆盖：只说会影响结果的事。图纸、图片、重复文件不单独提示（文件清单里有状态），
+ * 正文、合同、规范、报价表这类文件没解析出来才提醒，因为可能漏了要求。
+ */
+export function Coverage({ r, onOpen }: { r: TenderParseResult; onOpen?: (fileId: string, name: string) => void }) {
+  const miss = r.files.filter(unparsed);
+  const key = miss.filter((f) => !minor(f));
+  const ok = r.files.length - miss.length;
+  const line = [
+    miss.length ? `${r.files.length} 个文件，解析 ${ok} 个` : `${r.files.length} 个文件全部解析`,
+    miss.length - key.length ? `${miss.length - key.length} 个图纸 / 图片 / 地图未解析，通常不含条款要求` : '',
+    r.duplicateFiles ? `另有 ${r.duplicateFiles} 个重复文件已合并` : '',
+  ].filter(Boolean).join('；');
+  return (
+    <>
+      <div className="tp-coverage">{line}。</div>
+      {!!key.length && (
+        <div className="tp-alert orange">
+          <AlertTriangle size={14} />
+          <div>
+            <b>{key.length} 个可能含要求的文件没解析出来，分解表可能有遗漏</b>
+            {key.map((f) => (
+              <div key={f.id}>
+                {onOpen ? <button type="button" className="tp-filelink" onClick={() => onOpen(f.id, f.name)}>{f.name}</button> : f.name}
+                （{ROLE_LABEL[f.role]}{f.pages ? ` · ${f.pages} 页` : ''}）：{fix(f)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+export function FilesCard({ r, onOpen }: { r: TenderParseResult; onOpen?: (fileId: string, name: string) => void }) {
   const files = [...r.files].sort((a, b) => b.precedence - a.precedence);
   return (
     <div className="tp-card">
-      <div className="tp-card-head"><FileText size={14} /><b>文件角色</b><span className="tp-muted">按效力顺序（澄清 &gt; 修订 &gt; 规范 / 合同 &gt; 正文）</span></div>
-      <table className="tp-table">
-        <thead><tr><th>文件</th><th>角色</th><th>页</th><th>章节 / 条款</th><th>状态</th></tr></thead>
+      <div className="tp-card-head"><FileText size={14} /><b>文件角色</b><span className="tp-muted">按效力顺序（澄清 &gt; 修订 &gt; 规范 / 合同 &gt; 正文）{r.duplicateFiles ? `，另有 ${r.duplicateFiles} 个重复文件已合并` : ''}</span></div>
+      <table className="tp-table tp-files">
+        <thead><tr><th>文件</th><th>角色</th><th>页</th><th>章节 / 条款</th><th>状态</th><th>说明</th></tr></thead>
         <tbody>
           {files.map((f) => (
             <tr key={f.id}>
-              <td className="tp-file" title={f.path}>{f.name}</td>
+              <td className="tp-file" title={f.path}>{onOpen ? <button type="button" className="tp-filelink" onClick={() => onOpen(f.id, f.name)}>{f.name}</button> : f.name}</td>
               <td><span className={'tp-role r-' + f.role}>{ROLE_LABEL[f.role]}</span></td>
               <td className="tp-num">{f.pages || '–'}</td>
               <td className="tp-num">{f.clauses ? `${f.sections} / ${f.clauses}` : <span className="tp-muted">只登记</span>}</td>
-              <td title={f.note}><span className={'tp-pill ' + (f.status === 'ok' ? 'green' : f.status === 'partial_scanned' ? 'gray' : 'orange')}>{STATUS_LABEL[f.status]}</span></td>
+              <td><span className={'tp-pill ' + (f.status === 'ok' ? 'green' : !unparsed(f) || minor(f) ? 'gray' : 'orange')}>{STATUS_LABEL[f.status]}</span></td>
+              <td className="tp-small tp-muted">{f.status === 'ok' ? (f.note || '') : unparsed(f) && minor(f) ? '图纸 / 图片类，通常不含条款' : f.note || ''}</td>
             </tr>
           ))}
         </tbody>
