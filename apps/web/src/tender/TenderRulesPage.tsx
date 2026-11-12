@@ -6,11 +6,21 @@ import type { FileRole, JudgeConfig, RulePreviewClause, Severity, Strength, Tend
 import { TENDER_CATEGORIES } from "../../../../packages/contracts/tender";
 import { CAT_LABEL, ROLE_LABEL, SEV_LABEL, STRENGTH_LABEL } from "./TenderResult";
 import "./tender.css";
+import { LibraryPanel, SuggestionsPanel, VersionsPanel } from "./EvolvePanels";
 
 type Api = (path: string, options?: Record<string, unknown>) => Promise<any>;
 
 /** 标书解析规则配置（独立页面）：投标「招标文件」Tab 解析时用的全部规则都在这里维护、试跑、回滚。 */
+type PageTab = 'rules' | 'suggestions' | 'library' | 'versions';
 export function TenderRulesPage({ api }: { api: Api }) {
+  const [tab, setTab] = useState<PageTab>('rules');
+  // 自进化发布或回滚后规则版本会变，规则配置要重新读
+  const [meta, setMeta] = useState<{ version: number; canEdit: boolean; pending: number }>({ version: 0, canEdit: false, pending: 0 });
+  const [gen, setGen] = useState(0);
+  const loadMeta = () => Promise.all([api('/tender/rules'), api('/tender/evolve/suggestions').catch(() => [])]).then(([j, s]) => setMeta({ version: j.rules.version, canEdit: j.canEdit, pending: (s as { status: string }[]).filter((x) => x.status === 'draft' || x.status === 'blocked').length }));
+  useEffect(() => { void loadMeta(); }, [gen]);
+  const changed = () => setGen((n) => n + 1);
+  const tabs: [PageTab, string][] = [['rules', '规则与模型判断'], ['suggestions', `改进建议${meta.pending ? ` · ${meta.pending}` : ''}`], ['library', '改进库'], ['versions', '历史版本']];
   return (
     <div className="tp-root">
       <header className="tp-head">
@@ -19,7 +29,11 @@ export function TenderRulesPage({ api }: { api: Api }) {
           <p>文件角色 → 章节 → 分类（技术 · 交付 · 价格 · 商务 · 偏差）→ 强制项 / 风险 / 关键字段 → 责任分工；投标「招标文件」Tab 上传后按这里生效的规则解析</p>
         </div>
       </header>
-      <RuleConfig api={api} />
+      <nav className="tp-evtabs">{tabs.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</nav>
+      {tab === 'rules' && <RuleConfig key={gen} api={api} onSaved={() => void loadMeta()} />}
+      {tab === 'suggestions' && <SuggestionsPanel api={api} canEdit={meta.canEdit} onChanged={changed} />}
+      {tab === 'library' && <LibraryPanel api={api} />}
+      {tab === 'versions' && <VersionsPanel api={api} canEdit={meta.canEdit} current={meta.version} onChanged={changed} />}
     </div>
   );
 }
@@ -43,7 +57,7 @@ const TEAM_ROLES = ['SLS', 'PM', 'SC', 'QA', 'AMD', 'BSD'];
 function regexError(src: string): string | null { try { new RegExp(src, 'iu'); return null; } catch (e) { return (e as Error).message; } }
 const newId = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 
-function RuleConfig({ api }: { api: Api }) {
+function RuleConfig({ api, onSaved }: { api: Api; onSaved?: () => void }) {
   const [saved, setSaved] = useState<TenderRuleSet | null>(null);
   const [draft, setDraft] = useState<TenderRuleSet | null>(null);
   const [canEdit, setCanEdit] = useState(false);
@@ -67,7 +81,7 @@ function RuleConfig({ api }: { api: Api }) {
   const flash = (tone: string, text: string) => { setMsg({ tone, text }); setTimeout(() => setMsg(null), 5000); };
   async function save() {
     setBusy(true);
-    try { const r = await api('/tender/rules', { method: 'PUT', body: draft }); setSaved(r); setDraft(structuredClone(r)); flash('green', `已保存为 v${r.version}，下次解析生效`); }
+    try { const r = await api('/tender/rules', { method: 'PUT', body: draft }); setSaved(r); setDraft(structuredClone(r)); flash('green', `已保存为 v${r.version}，下次解析生效`); onSaved?.(); }
     catch (e) { flash('red', (e as Error).message); } finally { setBusy(false); }
   }
   async function reset() {
