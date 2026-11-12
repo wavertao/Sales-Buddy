@@ -222,7 +222,9 @@ function currentRoundLabel(bidId: string): string {
 // ---- 计划 / 甘特 ---------------------------------------------------------------
 export function getPlan(user: User, id: string) {
   const bid = loadBid(user, id);
-  const c = collections(id);
+  const all = collections(id);
+  // 标书拆解里要求全被改走、没开始的条目只留痕，不进计划（和分解表一致）
+  const c = { ...all, items: all.items.filter((it) => !(it.tenderKey && !Number(it.requirementCount) && it.status === 'pending')) };
   const gantt = [
     ...(bid.aiDraft?.items || []).map((it) => ({ kind: 'draft', ...it })),
     ...c.items.map((it) => ({ kind: 'item', id: it.id, title: it.title, node: it.node, assigneeRole: it.assigneeRole, assigneeId: it.assigneeId, start: it.start, end: it.end, status: it.status })),
