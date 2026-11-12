@@ -444,3 +444,37 @@ test('TENDER-17 原文件：上传的文件另存，可按文件编号取回，�
   assert.match(new TextDecoder().decode((await readRunFile(r.id, inner.id)).bytes), /UL9540A/);
   await assert.rejects(() => readRunFile(r.id, 'F99'), /没有这个文件/);
 });
+
+test('TENDER-18 BSD 审核：提交即锁定，退回要写意见并解锁，通过后按条目下发任务、流水线进入已下发', async () => {
+  const { seed } = await import('../apps/server/src/seed.ts');
+  const { seedP9 } = await import('../apps/server/src/p9/seed-p9.ts');
+  const C = await import('../apps/server/src/crm.ts');
+  const S = await import('../apps/server/src/p9/service.ts');
+  const { children } = await import('../apps/server/src/p9/store.ts');
+  seed(); seedP9();
+  const admin = C.user('U-ADMIN');
+  const bid = S.listBids(admin, {}).records[3];
+  await S.parseTenderForBid(admin, bid.id, { upload: { name: '包', files: [txt('招标文件正文.txt', RFP)] } });
+  const key = S.tenderForBid(admin, bid.id).result!.items[0].clauseKey!;
+  const sub = S.submitTenderBsd(admin, bid.id);
+  assert.equal(sub.bsd?.status, 'pending');
+  assert.equal(sub.canReview, false, '提交后分解表只读');
+  assert.ok(children(bid.id, 'bid_task').some((t: any) => t.source === 'tender-bsd' && t.assigneeRole === 'BSD'), '给 BSD 发了审核待办');
+  assert.throws(() => S.reviewTenderClause(admin, bid.id, key, { isRequirement: true, category: 'technical' }), /BSD 审核/);
+  assert.throws(() => S.submitTenderBsd(admin, bid.id), /已经提交/);
+  assert.throws(() => S.reviewTenderBsd(admin, bid.id, { decision: 'reject' }), /修改意见/);
+  const back = S.reviewTenderBsd(admin, bid.id, { decision: 'reject', notes: '强制项再核一遍' });
+  assert.equal(back.bsd?.status, 'rejected');
+  assert.ok(children(bid.id, 'bid_task').some((t: any) => t.source === 'tender-bsd-rework' && t.assigneeRole === 'PM'));
+  S.reviewTenderClause(admin, bid.id, key, { isRequirement: true, category: 'technical' }); // 退回后可以再改
+  S.submitTenderBsd(admin, bid.id);
+  const ok = S.reviewTenderBsd(admin, bid.id, { decision: 'approve' });
+  assert.equal(ok.bsd?.status, 'approved');
+  const items = ok.items.filter((x: any) => Number(x.requirementCount));
+  const tasks = children(bid.id, 'bid_task').filter((t: any) => t.source === 'tender-dispatch');
+  assert.equal(tasks.length, items.length, '每个分解条目下发一个任务');
+  assert.equal(ok.bsd?.dispatched, items.length);
+  assert.ok(items.every((x: any) => x.status === 'dispatched'));
+  assert.equal(S.aiStatus(admin, bid.id).pipeline, 'dispatched', '流水线进入已下发');
+  assert.throws(() => S.reviewTenderClause(admin, bid.id, key, { isRequirement: true, category: 'technical' }), /上传新版/);
+});

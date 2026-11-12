@@ -12,7 +12,9 @@ import { useP9 } from '../store';
 import { Btn } from '../ui';
 
 type Sample = { id: string; name: string; kind: 'single' | 'package'; files: number; size: number };
-type Bundle = { doc: { filename: string; version: string; size: string } | null; result: TenderParseResult | null; items: WorkItem[]; job?: TenderJob | null; canReview?: boolean };
+type Bundle = { doc: { filename: string; version: string; size: string } | null; result: TenderParseResult | null; items: WorkItem[]; job?: TenderJob | null; canReview?: boolean; canBsd?: boolean; bsd?: Bsd | null };
+type Bsd = { status: 'pending' | 'approved' | 'rejected'; version: string; submittedBy: string; submittedAt: string; reviewedBy?: string; reviewedAt?: string; notes?: string; dispatched?: number };
+const at = (s?: string) => (s ? s.slice(5, 16).replace('T', ' ') : '');
 const STEPS: [TenderProgress['stage'], string, string][] = [['extract', '文件抽取', '读取正文 / 规范 / 修订 / 澄清 / 报价表 / 图纸'], ['judge', '条款判断', '配置了模型时逐批判断，否则按规则打标'], ['summary', '归纳工作项', '模型按工作项归纳，写回投标']];
 const POLL_MS = 1500;
 type Sub = 'breakdown' | 'overview' | 'excluded';
@@ -91,7 +93,8 @@ export function LiveDocs() {
   const [job, setJob] = useState<TenderJob | null>(null);
   const [sub, setSub] = useState<Sub>('breakdown');
   const [excluded, setExcluded] = useState<ExcludedClause[]>([]);
-  const [submitted, setSubmitted] = useState(false);
+  const [bsdBusy, setBsdBusy] = useState(false);
+  const [rejectNote, setRejectNote] = useState<string | null>(null);
   const [uploading, setUploading] = useState('');
   const reupload = useRef<HTMLInputElement>(null);
   const base = '/bids/' + encodeURIComponent(bid.id);
@@ -111,7 +114,7 @@ export function LiveDocs() {
       else void api(base + '/plan').then((p: { items?: Record<string, unknown>[] }) => { if (p?.items?.length) setPlan(mapPlan(p.items, today)); }).catch(() => undefined);
       const b: Bundle = await api(base + '/tender');
       if (!alive) return;
-      setData(b); setJob(null); setSubmitted(false);
+      setData(b); setJob(null);
       if (j.status === 'done' && b.result) notify(`解析完成：${b.result.stats.items} 条要求，${b.items.length} 个拆标分解条目`);
     }).catch((e: Error) => { if (alive) { notify('读取解析进度失败：' + e.message); setJob(null); } });
     let timer = window.setTimeout(tick, POLL_MS);
@@ -158,6 +161,16 @@ export function LiveDocs() {
   const r = data.result;
   const s = r.stats;
   const onReview = data.canReview ? review : undefined;
+  const bsd = data.bsd || null;
+  const refreshPlan = () => void api(base + '/plan').then((p: { items?: Record<string, unknown>[] }) => { if (p?.items?.length) setPlan(mapPlan(p.items, today)); }).catch(() => undefined);
+  const bsdCall = async (path: string, body: Record<string, unknown>, done: (b: Bundle) => string) => {
+    setBsdBusy(true);
+    try { const b: Bundle = await api(base + '/tender/bsd/' + path, { method: 'POST', body }); setData(b); notify(done(b)); refreshPlan(); }
+    catch (e) { notify((e as Error).message); } finally { setBsdBusy(false); }
+  };
+  const submitBsd = () => void bsdCall('submit', {}, () => '已提交 BSD 审核：这一版已锁定，BSD 收到审核待办');
+  const approveBsd = () => void bsdCall('review', { decision: 'approve' }, (b) => `已通过 BSD 审核，下发 ${b.bsd?.dispatched ?? 0} 个任务到计划和待办`);
+  const rejectBsd = () => { if (!rejectNote?.trim()) { notify('请写明修改意见'); return; } void bsdCall('review', { decision: 'reject', notes: rejectNote.trim() }, () => '已退回，PM 收到修改待办').then(() => setRejectNote(null)); };
   const excludedCount = r.judge?.excluded ?? 0;
   const openFile = (fileId: string, name: string) => { void openTenderFile(bid.id, fileId, name).catch((e: Error) => notify(e.message)); };
   return (
@@ -171,11 +184,25 @@ export function LiveDocs() {
         <div className="tb-subtabs-right">
           <span className="tb-subtabs-meta"><FileArchive size={12} /> {r.packageName} · {data.doc?.version} · {r.createdAt.slice(5, 10)} 解析 · {r.judge?.mode === 'model' ? '模型判断' : '规则判断'}</span>
           <input ref={reupload} type="file" hidden multiple onChange={e => upload(e.target.files)} />
-          <Btn kind="outline" size="sm" icon={Upload} onClick={() => reupload.current?.click()}>上传新版</Btn>
+          <Btn kind="outline" size="sm" icon={Upload} disabled={bsd?.status === 'pending'} onClick={() => reupload.current?.click()}>上传新版</Btn>
           <Btn kind="outline" size="sm" icon={Download} onClick={() => { void api(base + '/tender/excluded').catch(() => []).then((ex: ExcludedClause[]) => exportBreakdownXlsx(r, data.items, ex)).then(() => notify('已导出拆标分解表（Excel：工作项、要求明细、已排除）')).catch((e: Error) => notify('导出失败：' + e.message)); }}>导出</Btn>
-          <Btn kind="primary" size="sm" icon={Send} disabled={submitted} onClick={() => { setSubmitted(true); notify('已提交 BSD 审核：拆解表版本已锁定，BSD 收到待办'); window.setTimeout(() => setTab('plan'), 900); }}>{submitted ? '已提交 BSD' : '提交 BSD 审核'}</Btn>
+          <Btn kind="primary" size="sm" icon={Send} disabled={bsdBusy || bsd?.status === 'pending' || bsd?.status === 'approved'} onClick={submitBsd}>{bsd?.status === 'pending' ? 'BSD 审核中' : bsd?.status === 'approved' ? '已通过 BSD' : bsd?.status === 'rejected' ? '重新提交 BSD' : '提交 BSD 审核'}</Btn>
         </div>
       </div>
+      {bsd && (
+        <div className={'tb-bsd is-' + bsd.status}>
+          {bsd.status === 'pending' && <><b>BSD 审核中</b><span>{bsd.version} · {bsd.submittedBy} {at(bsd.submittedAt)} 提交，审核完成前分解表只读</span></>}
+          {bsd.status === 'approved' && <><b>已通过 BSD 审核</b><span>{bsd.reviewedBy} {at(bsd.reviewedAt)} 通过，下发 {bsd.dispatched ?? 0} 个任务{bsd.notes ? `；意见：${bsd.notes}` : ''}。如需修改请上传新版</span><button type="button" className="tb-linkbtn" onClick={() => setTab('plan')}>去计划查看</button></>}
+          {bsd.status === 'rejected' && <><b>BSD 已退回</b><span>{bsd.reviewedBy} {at(bsd.reviewedAt)}：{bsd.notes}。改完后重新提交</span></>}
+          {bsd.status === 'pending' && data.canBsd && (
+            <span className="tb-bsd-actions">
+              {rejectNote === null
+                ? <><Btn kind="primary" size="sm" disabled={bsdBusy} onClick={approveBsd}>通过并下发</Btn><Btn kind="outline" size="sm" disabled={bsdBusy} onClick={() => setRejectNote('')}>退回</Btn></>
+                : <><input autoFocus value={rejectNote} maxLength={500} placeholder="写明修改意见" onChange={e => setRejectNote(e.target.value)} /><Btn kind="primary" size="sm" disabled={bsdBusy} onClick={rejectBsd}>确认退回</Btn><Btn kind="ghost" size="sm" onClick={() => setRejectNote(null)}>取消</Btn></>}
+            </span>
+          )}
+        </div>
+      )}
       <div className="tb-tabbody">
         {sub === 'breakdown' && <TenderBreakdown result={r} items={data.items} onReview={onReview} excludedCount={excludedCount} />}
         {sub === 'overview' && (

@@ -99,6 +99,8 @@ r.get('/bids/:id/tender/files/:fileId', async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.send(Buffer.from(f.bytes));
 });
+r.post('/bids/:id/tender/bsd/submit', (req, res) => res.json(S.submitTenderBsd(u(req, res), req.params.id, z.object({ notes: z.string().max(500).optional() }).parse(req.body || {}).notes)));
+r.post('/bids/:id/tender/bsd/review', (req, res) => res.json(S.reviewTenderBsd(u(req, res), req.params.id, z.object({ decision: z.enum(['approve', 'reject']), notes: z.string().max(500).optional() }).parse(req.body))));
 r.get('/bids/:id/tender/excluded', (req, res) => res.json(S.tenderExcluded(u(req, res), req.params.id)));
 r.patch('/bids/:id/tender/clauses/:key', (req, res) => res.json(S.reviewTenderClause(u(req, res), req.params.id, req.params.key, parse(clauseReviewSchema, req.body))));
 r.post('/bids/:id/ai/decompose', async (req, res) => res.json(await S.aiDecomposeRoute(u(req, res), req.params.id, ((req.body as { documentId?: string } | undefined)?.documentId) || undefined)));

@@ -815,8 +815,78 @@ export function reviewTenderClause(user: User, bidId: string, key: string, body:
   const bid = loadBid(user, bidId);
   reviewer(user);
   if (runningJobForBid(bidId)) throw new AppError('CONFLICT', '正在解析，请等解析完成后再改判', 409);
+  assertEditable(bidId);
   const result = reviewClause(user.name, bidId, latestRun(bidId), getRules(), key, body);
   syncTenderItems(bid, result);
+  return tenderForBid(user, bidId);
+}
+/**
+ * BSD 审核：拆标分解表定稿的唯一人工关口。
+ * 提交：锁定当前版本（不能再改判或重新解析），给 BSD 发一条审核待办。
+ * 通过：把这一版的分解条目下发成任务（按条目的主责角色和截止日），流水线进入「已下发」，节点推进到开工会。
+ * 退回：解锁，给 PM 发一条「按 BSD 意见修改」待办，改完可以再提交。
+ * 审核人是主管或管理员（演示环境里没有单独的 BSD 账号）。
+ */
+export type BsdState = { status: 'pending' | 'approved' | 'rejected'; version: string; submittedBy: string; submittedAt: string; reviewedBy?: string; reviewedAt?: string; notes?: string; dispatched?: number };
+const latestTenderDoc = (bidId: string) => {
+  const ver = (d: BidDoc) => Number(String(d.version).replace(/\D/g, '')) || 0;
+  return children<BidDoc>(bidId, 'bid_doc').filter((d) => d.tenderRunId).sort((a, b) => ver(b) - ver(a))[0];
+};
+const bsdOf = (bidId: string) => (latestTenderDoc(bidId)?.bsd as BsdState | undefined) || null;
+/** 已提交或已通过时不能再改分解结果 */
+const assertEditable = (bidId: string) => {
+  const b = bsdOf(bidId);
+  if (b?.status === 'pending') throw new AppError('CONFLICT', '拆标分解表正在 BSD 审核，审核完成前不能修改', 409);
+  if (b?.status === 'approved') throw new AppError('CONFLICT', '拆标分解表已通过 BSD 审核并下发，如需修改请上传新版', 409);
+};
+const tenderItems = (bidId: string) => children<BidItem>(bidId, 'bid_item').filter((x) => x.tenderKey && (x.requirementCount || x.status !== 'pending'));
+export function submitTenderBsd(user: User, bidId: string, notes?: string) {
+  const bid = loadBid(user, bidId);
+  if (runningJobForBid(bidId)) throw new AppError('CONFLICT', '正在解析，请等解析完成后再提交', 409);
+  const doc = latestTenderDoc(bidId);
+  if (!doc) throw new AppError('CONFLICT', '还没有拆标分解表可提交', 409);
+  const cur = doc.bsd as BsdState | undefined;
+  if (cur?.status === 'pending') throw new AppError('CONFLICT', '已经提交 BSD 审核，请等审核结果', 409);
+  if (cur?.status === 'approved') throw new AppError('CONFLICT', '这一版已通过 BSD 审核', 409);
+  const items = tenderItems(bidId);
+  if (!items.length) throw new AppError('CONFLICT', '拆标分解表是空的，不能提交', 409);
+  const review = items.reduce((n, x) => n + Number(x.reviewCount || 0), 0);
+  const bsd: BsdState = { status: 'pending', version: doc.version, submittedBy: user.name, submittedAt: stamp(), notes: notes || '' };
+  saveChild({ ...doc, bsd, updatedAt: stamp() });
+  saveChild({ ...childBase(bid, newId('BT'), 'bid_task', `审核拆标分解表 ${doc.version}`), title: `审核拆标分解表 ${doc.version}（${items.length} 个工作项${review ? `，${review} 条待确认` : ''}）`, bidItemId: null, node: 2, assigneeId: null, assigneeRole: 'BSD', dueAt: addDays(todayStr(), 1), priority: 'P0', status: 'todo', source: 'tender-bsd', comments: [], result: null, completedAt: null, escalationLevel: null } as BidTask);
+  return tenderForBid(user, bidId);
+}
+export function reviewTenderBsd(user: User, bidId: string, body: { decision: 'approve' | 'reject'; notes?: string }) {
+  let bid = loadBid(user, bidId);
+  if (user.role !== 'admin' && user.role !== 'manager') throw new AppError('FORBIDDEN', '只有 BSD（主管或管理员）可以审核', 403);
+  const doc = latestTenderDoc(bidId);
+  const cur = doc?.bsd as BsdState | undefined;
+  if (!doc || cur?.status !== 'pending') throw new AppError('CONFLICT', '没有待审核的拆标分解表', 409);
+  if (body.decision === 'reject' && !body.notes?.trim()) throw new AppError('INVALID_ARGUMENT', '退回时请写明修改意见', 400);
+  const now = stamp();
+  // 关掉这一版的审核待办
+  for (const t of children<BidTask>(bidId, 'bid_task').filter((t) => t.source === 'tender-bsd' && t.status !== 'done' && t.status !== 'cancelled')) {
+    saveChild({ ...t, status: 'done', completedAt: now, result: { outcome: body.decision === 'approve' ? '通过' : '退回', note: body.notes || '', at: now, by: user.name }, updatedAt: now });
+  }
+  if (body.decision === 'reject') {
+    saveChild({ ...doc, bsd: { ...cur, status: 'rejected', reviewedBy: user.name, reviewedAt: now, notes: body.notes }, updatedAt: now });
+    saveChild({ ...childBase(bid, newId('BT'), 'bid_task', '按 BSD 意见修改拆标分解表'), title: `按 BSD 意见修改拆标分解表 ${doc.version}：${body.notes!.slice(0, 60)}`, bidItemId: null, node: 2, assigneeId: null, assigneeRole: 'PM', dueAt: addDays(todayStr(), 1), priority: 'P0', status: 'todo', source: 'tender-bsd-rework', comments: [], result: null, completedAt: null, escalationLevel: null } as BidTask);
+    return tenderForBid(user, bidId);
+  }
+  // 通过：没开始的分解条目下发成任务；已有任务的不重复建
+  const tasks = children<BidTask>(bidId, 'bid_task');
+  let dispatched = 0;
+  for (const it of tenderItems(bidId)) {
+    if (!Number(it.requirementCount)) continue;
+    if (it.status === 'pending') saveChild({ ...it, status: 'dispatched', updatedAt: now });
+    if (tasks.some((t) => t.bidItemId === it.id && t.status !== 'cancelled')) continue;
+    const review = Number(it.reviewCount || 0);
+    saveChild({ ...childBase(bid, newId('BT'), 'bid_task', it.title), title: it.title, bidItemId: it.id, node: it.node, assigneeId: it.assigneeId, assigneeRole: it.assigneeRole, dueAt: it.end, priority: Number(it.mandatoryCount) ? 'P0' : 'P1', status: 'todo', source: 'tender-dispatch', comments: review ? [{ id: newId('CM'), author: 'BSD', text: `有 ${review} 条要求待确认，处理时先核对`, at: now }] : [], result: null, completedAt: null, escalationLevel: null } as BidTask);
+    dispatched++;
+  }
+  saveChild({ ...doc, bsd: { ...cur, status: 'approved', reviewedBy: user.name, reviewedAt: now, notes: body.notes || '', dispatched }, updatedAt: now });
+  if (['idle', 'planning', 'plan_draft', 'decomposing'].includes(bid.aiPipeline)) bid = saveBid({ ...bid, aiPipeline: 'dispatched', aiLastError: null });
+  if (bid.currentNode === 2) nudge(bid);
   return tenderForBid(user, bidId);
 }
 export function tenderExcluded(user: User, bidId: string) {
@@ -827,6 +897,7 @@ export function tenderExcluded(user: User, bidId: string) {
 export function startTenderJobForBid(user: User, bidId: string, input: { sample?: string; upload?: { name: string; files: SourceFile[] } }) {
   loadBid(user, bidId);
   if (runningJobForBid(bidId)) throw new AppError('CONFLICT', '这个投标正在解析，请等当前解析完成', 409);
+  if (bsdOf(bidId)?.status === 'pending') throw new AppError('CONFLICT', '拆标分解表正在 BSD 审核，审核完成前不能重新解析', 409);
   const name = input.upload?.name || input.sample?.split('/').pop() || '招标文件';
   return startJob(user.name, name, bidId, async (onProgress) => ({ runId: (await parseTenderForBid(user, bidId, input, onProgress)).result.id }));
 }
@@ -838,7 +909,9 @@ export function tenderForBid(user: User, bidId: string) {
   const ver = (d: BidDoc) => Number(String(d.version).replace(/\D/g, '')) || 0;
   const doc = children<BidDoc>(bidId, 'bid_doc').filter((d) => d.tenderRunId).sort((a, b) => ver(b) - ver(a))[0];
   const canReview = user.role === 'admin' || user.role === 'manager';
-  if (!doc) return { doc: null, result: null, items: [], job, canReview };
+  if (!doc) return { doc: null, result: null, items: [], job, canReview, bsd: null };
+  const bsd = (doc.bsd as BsdState | undefined) || null;
   const items = children<BidItem>(bidId, 'bid_item').filter((x) => x.tenderKey && (x.requirementCount || x.status !== 'pending'));
-  return { doc, result: getRun(String(doc.tenderRunId)), items, job, canReview };
+  // 提交或通过后分解表只读
+  return { doc, result: getRun(String(doc.tenderRunId)), items, job, canReview: canReview && !['pending', 'approved'].includes(String(bsd?.status)), canBsd: canReview, bsd };
 }
