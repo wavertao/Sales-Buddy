@@ -21,6 +21,18 @@ const sameField = (a: string, b: string) => { const x = norm(a), y = norm(b); re
 /** 标准号比对：去掉空格、斜杠、连字符，UL9540A / UL 9540A / UL-9540A 视为同一个 */
 const code = (s: string) => s.replace(/[\s/\-_.]/g, '').toLowerCase();
 
+/** 数值名里括号中的单位，如「质保期（年）」→ 年 */
+const unitOf = (field: string) => (field.match(/[（(]([^（）()]*)[）)]\s*$/)?.[1] || '').replace(/^占合同价\s*/, '').trim();
+/** 时间单位统一成天再换算；百分比只认 %；单位都没写时原样比较 */
+const DAYS: Record<string, number> = { 天: 1, 日: 1, day: 1, days: 1, d: 1, 周: 7, 星期: 7, week: 7, weeks: 7, 月: 30.4, 个月: 30.4, month: 30.4, months: 30.4, 年: 365, year: 365, years: 365, yr: 365, yrs: 365 };
+function convert(value: number, from: string, to: string): number | null {
+  const f = from.trim().toLowerCase(), g = to.trim().toLowerCase();
+  if (!f || !g || f === g) return value;
+  if (DAYS[f] && DAYS[g]) return Math.round((value * DAYS[f]) / DAYS[g] * 100) / 100;
+  if (/%|％|percent/.test(f) && /%|％/.test(g)) return value;
+  return null;
+}
+
 export function programChecks(text: string, item: ReviewItem | undefined, values: Value[], standards: StandardEntry[]): CheckResult {
   const out: CheckResult = { risks: [], reasons: [], checks: [] };
   const raise = (level: ItemLevel, label: string, detail: string) => {
@@ -31,12 +43,15 @@ export function programChecks(text: string, item: ReviewItem | undefined, values
   };
 
   for (const c of item?.checks || []) {
-    const v = values.find((x) => sameField(x.field, c.field) && typeof x.value === 'number');
-    const unit = c.unit || '';
     // 「没找到」要看整个审查项的所有条款，在 missingChecks 里统一判
     if (c.op === 'missing') continue;
-    if (!v || typeof c.value !== 'number') continue;
-    const n = v.value as number, t = c.value;
+    const raw = values.find((x) => sameField(x.field, c.field) && typeof x.value === 'number');
+    if (!raw || typeof c.value !== 'number') continue;
+    // AI 按原文单位抽数（不换算），程序换成校验要求的单位；换不了的不比，免得「24 个月」被当成 24 年
+    const unit = c.unit || unitOf(c.field);
+    const n = convert(raw.value as number, raw.unit || '', unit);
+    if (n === null) { out.checks.push({ label: `${item!.name}：${c.field}`, hit: false, detail: `抽到 ${raw.value}${raw.unit || ''}，单位和「${c.field}」对不上，未比较` }); continue; }
+    const t = c.value;
     const hit = c.op === '>' ? n > t : c.op === '>=' ? n >= t : c.op === '<' ? n < t : n <= t;
     const detail = `${c.field} ${n}${unit} ${c.op} ${t}${unit}`;
     if (hit) raise(c.result, `${item!.name}：${c.field} ${n}${unit}`, `${detail} → ${LEVEL_LABEL[c.result]}`);
