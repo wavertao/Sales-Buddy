@@ -8,6 +8,7 @@ import { previewText } from './pipeline.ts';
 import { getJob, getRun, listRuns, listSamples, parseSample, parseUpload } from './service.ts';
 import { generateSuggestions, library, publish, reject, replay, suggestions, versions } from './evolve.ts';
 import { record } from '../db.ts';
+import { modelStatus } from '../model.ts';
 import type { TenderRuleSet } from '../../../../packages/contracts/tender.ts';
 
 /**
@@ -27,7 +28,7 @@ const editor = (res: express.Response) => {
 };
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 120 * 1024 * 1024, files: 60, fields: 4 } });
 
-r.get('/tender/rules', (_req, res) => res.json({ rules: getRules(), canEdit: ['admin', 'manager'].includes(user(res).role) }));
+r.get('/tender/rules', (_req, res) => res.json({ rules: getRules(), canEdit: ['admin', 'manager'].includes(user(res).role), model: modelStatus().configured ? modelStatus().model : null }));
 r.put('/tender/rules', (req, res) => res.json(saveRules(editor(res), req.body)));
 r.post('/tender/rules/reset', (_req, res) => res.json(resetRules(editor(res))));
 r.get('/tender/rules/history', (_req, res) => res.json(ruleHistory()));

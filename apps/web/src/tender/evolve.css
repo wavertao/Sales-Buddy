@@ -73,3 +73,23 @@
 .tp-evtabs button { border: 0; background: none; padding: 10px 0 9px; border-bottom: 2px solid transparent; color: var(--ev-sub); font: inherit; font-size: 13px; cursor: pointer; }
 .tp-evtabs button.on { color: var(--ev-blue); font-weight: 700; border-bottom-color: var(--ev-blue); }
 @media (max-width: 1100px) { .ev-split { flex-direction: column; } .ev-side { width: 100%; } .ev-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* 原型 R2 / R4 细节 */
+.ev-head-main { display: flex; flex-direction: column; gap: 4px; }
+.ev-head-main > div { display: flex; align-items: center; gap: 8px; }
+.ev-head-main b { font-size: 14px; }
+.ev-orange { background: var(--ev-orange-bg); border-color: transparent; color: #C77700; padding: 12px 14px; display: flex; gap: 8px; align-items: flex-start; line-height: 1.6; }
+.ev-diff { display: flex; gap: 8px; }
+.ev-diff span { font-weight: 700; }
+.ev-diff.is-add { background: var(--ev-green-bg); } .ev-diff.is-add span { color: #1F9D47; }
+.ev-diff.is-del { background: var(--ev-red-bg); } .ev-diff.is-del span { color: var(--ev-red); }
+.ev-diff.is-mod { background: var(--ev-orange-bg); } .ev-diff.is-mod span { color: var(--ev-orange); }
+.ev-actions { display: inline-flex; gap: 12px; white-space: nowrap; }
+.ev-table tr.is-pick td { background: var(--ev-bg); }
+.ev-table tbody tr { cursor: default; }
+.ev-note.is-link { color: var(--ev-blue); }
+.ev-flat { gap: 0; }
+.ev-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.ev-empty p { margin: 0; }
+.ev-chips { align-items: center; }
+.ev-basis .is-green { color: #1F9D47; }

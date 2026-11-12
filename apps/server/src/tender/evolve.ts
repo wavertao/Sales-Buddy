@@ -192,6 +192,8 @@ export function publish(id: string, by: string): Suggestion {
   const s = get<Suggestion>('tender_suggestions', id);
   if (!s) throw new AppError('NOT_FOUND', '改进建议不存在', 404);
   if (s.status !== 'draft' || !s.replay?.passed) throw new AppError('CONFLICT', s.status === 'blocked' ? '回放没通过，不能发布' : !s.replay ? '请先回放验证' : '这条建议已经处理过了', 409);
+  // 回放之后规则又变过（别的建议发布、回滚、手工保存），结论可能不再成立，要重新回放
+  if (s.replay.base !== getRules().version) throw new AppError('CONFLICT', `回放后规则已更新到 v${getRules().version}，请重新回放再发布`, 409);
   const r = publishRules(by === '自动生效' ? `自动生效（改进建议 #${s.no}）` : `${by}（采纳改进建议 #${s.no}）`, `#${s.no} ${s.title}`, (cur) => apply(cur, s));
   const out: Suggestion = { ...s, status: 'published', decidedBy: by, decidedAt: now(), publishedVersion: r.version };
   put('tender_suggestions', s.id, out);
@@ -216,6 +218,9 @@ export function versions() {
     const reviewedRuns = [...new Set(mine.map((f) => f.runId).filter(Boolean))].map((id) => runs.get(id!)).filter(Boolean) as { stats: { items: number } }[];
     const items = reviewedRuns.reduce((n, r) => n + r.stats.items, 0);
     const source = /自动生效/.test(h.updatedBy) ? 'auto' : /采纳改进建议/.test(h.updatedBy) ? 'suggestion' : /回滚/.test(h.updatedBy) ? 'rollback' : /默认/.test(h.updatedBy) ? 'default' : 'manual';
-    return { ...h, source, changed: mine.filter(changed).length, items, rate: items ? Math.round((mine.filter(changed).length / items) * 1000) / 10 : null };
+    // 由改进建议发布的版本带上回放摘要
+    const sug = suggestions().find((s) => s.publishedVersion === h.version);
+    const replay = sug?.replay ? `一致率 ${sug.replay.before.agreement}% → ${sug.replay.after.agreement}% · 强制误判 ${sug.replay.before.strongFalse} → ${sug.replay.after.strongFalse}` : '';
+    return { ...h, source, replay, changed: mine.filter(changed).length, items, rate: items ? Math.round((mine.filter(changed).length / items) * 1000) / 10 : null };
   });
 }

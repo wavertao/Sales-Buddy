@@ -1,39 +1,53 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, Check, ChevronDown, ChevronRight, FlaskConical, History, Loader2, Plus, RotateCcw, Save, Settings2, Trash2, X,
+  AlertTriangle, Check, ChevronDown, ChevronRight, FlaskConical, History, Loader2, Play, Plus, RotateCcw, Save, Settings2, SlidersHorizontal, Trash2, X,
 } from "lucide-react";
 import type { FileRole, JudgeConfig, RulePreviewClause, Severity, Strength, TenderCategory, TenderRuleSet } from "../../../../packages/contracts/tender";
 import { TENDER_CATEGORIES } from "../../../../packages/contracts/tender";
 import { CAT_LABEL, ROLE_LABEL, SEV_LABEL, STRENGTH_LABEL } from "./TenderResult";
 import "./tender.css";
+import "./rules-page.css";
 import { LibraryPanel, SuggestionsPanel, VersionsPanel } from "./EvolvePanels";
 
 type Api = (path: string, options?: Record<string, unknown>) => Promise<any>;
 
 /** 标书解析规则配置（独立页面）：投标「招标文件」Tab 解析时用的全部规则都在这里维护、试跑、回滚。 */
-type PageTab = 'rules' | 'suggestions' | 'library' | 'versions';
+type PageTab = 'judge' | 'rules' | 'suggestions' | 'library' | 'versions';
+type Meta = { version: number; updatedAt: string; updatedBy: string; canEdit: boolean; model: string | null; pending: number; policySource: Record<string, string> };
 export function TenderRulesPage({ api }: { api: Api }) {
-  const [tab, setTab] = useState<PageTab>('rules');
+  const [tab, setTab] = useState<PageTab>('judge');
+  const [group, setGroup] = useState<GroupKey>('judge');
+  const [tester, setTester] = useState(true);
   // 自进化发布或回滚后规则版本会变，规则配置要重新读
-  const [meta, setMeta] = useState<{ version: number; canEdit: boolean; pending: number }>({ version: 0, canEdit: false, pending: 0 });
+  const [meta, setMeta] = useState<Meta | null>(null);
   const [gen, setGen] = useState(0);
-  const loadMeta = () => Promise.all([api('/tender/rules'), api('/tender/evolve/suggestions').catch(() => [])]).then(([j, s]) => setMeta({ version: j.rules.version, canEdit: j.canEdit, pending: (s as { status: string }[]).filter((x) => x.status === 'draft' || x.status === 'blocked').length }));
+  const loadMeta = () => Promise.all([api('/tender/rules'), api('/tender/evolve/suggestions').catch(() => [])]).then(([j, s]) => {
+    const sugs = s as { status: string; no: number; publishedVersion?: number; change: { policies?: string[] } }[];
+    const policySource: Record<string, string> = {};
+    for (const x of sugs) if (x.status === 'published') for (const p of x.change.policies || []) policySource[p] = `来自改进建议 · v${x.publishedVersion} 审批`;
+    setMeta({ version: j.rules.version, updatedAt: j.rules.updatedAt, updatedBy: j.rules.updatedBy, canEdit: j.canEdit, model: j.model, pending: sugs.filter((x) => x.status === 'draft' || x.status === 'blocked').length, policySource });
+  });
   useEffect(() => { void loadMeta(); }, [gen]);
   const changed = () => setGen((n) => n + 1);
-  const tabs: [PageTab, string][] = [['rules', '规则与模型判断'], ['suggestions', `改进建议${meta.pending ? ` · ${meta.pending}` : ''}`], ['library', '改进库'], ['versions', '历史版本']];
+  const pick = (k: PageTab) => { setTab(k); if (k === 'judge') setGroup('judge'); if (k === 'rules' && group === 'judge') setGroup('mandatory'); };
+  const pickGroup = (g: GroupKey) => { setGroup(g); setTab(g === 'judge' ? 'judge' : 'rules'); };
+  const tabs: [PageTab, string][] = [['judge', '模型判断'], ['rules', '规则'], ['suggestions', `改进建议${meta?.pending ? ` · ${meta.pending}` : ''}`], ['library', '改进库'], ['versions', '历史版本']];
   return (
-    <div className="tp-root">
-      <header className="tp-head">
-        <div>
-          <h1><Settings2 size={20} />标书解析规则</h1>
-          <p>文件角色 → 章节 → 分类（技术 · 交付 · 价格 · 商务 · 偏差）→ 强制项 / 风险 / 关键字段 → 责任分工；投标「招标文件」Tab 上传后按这里生效的规则解析</p>
-        </div>
+    <div className="rp-shell">
+      <header className="rp-top">
+        <SlidersHorizontal size={16} /><b>标书解析规则</b>
+        {meta && <small>当前 v{meta.version} · {meta.updatedAt.slice(0, 10)} {meta.updatedBy.replace(/（.*$/, '')}发布 · 模型 {meta.model || '未配置（用规则结果）'}</small>}
+        <span className="rp-grow" />
+        <button className="rp-btn" onClick={() => { pickGroup(group === 'judge' ? 'mandatory' : group); setTester(true); }}><FlaskConical size={13} />试跑</button>
+        <button className="rp-btn" onClick={() => setTab('versions')}><History size={13} />历史版本</button>
       </header>
-      <nav className="tp-evtabs">{tabs.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</nav>
-      {tab === 'rules' && <RuleConfig key={gen} api={api} onSaved={() => void loadMeta()} />}
-      {tab === 'suggestions' && <SuggestionsPanel api={api} canEdit={meta.canEdit} onChanged={changed} />}
-      {tab === 'library' && <LibraryPanel api={api} />}
-      {tab === 'versions' && <VersionsPanel api={api} canEdit={meta.canEdit} current={meta.version} onChanged={changed} />}
+      <nav className="rp-tabs">{tabs.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => pick(k)}>{l}</button>)}</nav>
+      <div className="rp-body">
+        {(tab === 'judge' || tab === 'rules') && <RuleConfig key={gen} api={api} group={group} setGroup={pickGroup} tester={tester && tab === 'rules'} setTester={setTester} model={meta?.model || null} policySource={meta?.policySource || {}} onSaved={() => void loadMeta()} />}
+        {tab === 'suggestions' && <SuggestionsPanel api={api} canEdit={!!meta?.canEdit} version={meta?.version || 0} onChanged={changed} />}
+        {tab === 'library' && <LibraryPanel api={api} canEdit={!!meta?.canEdit} onChanged={changed} />}
+        {tab === 'versions' && <VersionsPanel api={api} canEdit={!!meta?.canEdit} current={meta?.version || 0} onChanged={changed} />}
+      </div>
     </div>
   );
 }
@@ -57,15 +71,12 @@ const TEAM_ROLES = ['SLS', 'PM', 'SC', 'QA', 'AMD', 'BSD'];
 function regexError(src: string): string | null { try { new RegExp(src, 'iu'); return null; } catch (e) { return (e as Error).message; } }
 const newId = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 
-function RuleConfig({ api, onSaved }: { api: Api; onSaved?: () => void }) {
+function RuleConfig({ api, group, setGroup, tester, setTester, model, policySource, onSaved }: { api: Api; group: GroupKey; setGroup: (g: GroupKey) => void; tester: boolean; setTester: (v: boolean) => void; model: string | null; policySource: Record<string, string>; onSaved?: () => void }) {
   const [saved, setSaved] = useState<TenderRuleSet | null>(null);
   const [draft, setDraft] = useState<TenderRuleSet | null>(null);
   const [canEdit, setCanEdit] = useState(false);
-  const [group, setGroup] = useState<GroupKey>('judge');
   const [msg, setMsg] = useState<{ tone: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [history, setHistory] = useState<{ version: number; updatedAt: string; updatedBy: string }[] | null>(null);
-  const [testOpen, setTestOpen] = useState(false);
 
   const load = () => api('/tender/rules').then((j) => { setSaved(j.rules); setDraft(structuredClone(j.rules)); setCanEdit(j.canEdit); });
   useEffect(() => { load().catch((e) => setMsg({ tone: 'red', text: e.message })); }, []);
@@ -92,53 +103,41 @@ function RuleConfig({ api, onSaved }: { api: Api; onSaved?: () => void }) {
   }
   async function restore(version: number) {
     setBusy(true);
-    try { const r = await api('/tender/rules/restore', { method: 'POST', body: { version } }); setSaved(r); setDraft(structuredClone(r)); setHistory(null); flash('green', `已回滚到 v${version} 的内容，保存为 v${r.version}`); }
+    try { const r = await api('/tender/rules/restore', { method: 'POST', body: { version } }); setSaved(r); setDraft(structuredClone(r)); flash('green', `已回滚到 v${version} 的内容，保存为 v${r.version}`); }
     catch (e) { flash('red', (e as Error).message); } finally { setBusy(false); }
   }
   const g = GROUPS.find((x) => x.key === group)!;
   const count = (k: GroupKey) => (k === 'options' ? 5 : k === 'judge' ? draft.judge.examples.length : (draft[k] as unknown[]).length);
 
+  void restore;
+  const isJudge = group === 'judge';
   return (
-    <div className="tp-rules">
-      <div className="tp-card tp-rulebar">
+    <div className="rp-config">
+      <div className="rp-card rp-rulebar">
         <b>规则 v{saved.version}</b>
-        <span className="tp-muted">{saved.updatedBy} · {saved.updatedAt.slice(0, 16).replace('T', ' ')}</span>
-        {dirty && <span className="tp-pill orange">有未保存的修改</span>}
-        {invalid > 0 && <span className="tp-pill red">{invalid} 条正则无效</span>}
-        {!canEdit && <span className="tp-pill gray">只读：主管或管理员才能保存</span>}
-        <span className="tp-grow" />
-        {msg && <span className={'tp-msg tone-' + msg.tone}>{msg.text}</span>}
-        <button className="tp-btn" onClick={() => setTestOpen(!testOpen)}><FlaskConical size={13} />试跑</button>
-        <div className="tp-dropdown">
-          <button className="tp-btn" onClick={() => (history ? setHistory(null) : api('/tender/rules/history').then(setHistory))}><History size={13} />历史版本</button>
-          {history && (
-            <div className="tp-menu">
-              {history.map((h) => (
-                <button key={h.version} disabled={!canEdit || h.version === saved.version || busy} onClick={() => restore(h.version)}>
-                  <b>v{h.version}</b><span>{h.updatedBy}</span><span className="tp-muted">{h.updatedAt.slice(5, 16).replace('T', ' ')}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <button className="tp-btn" disabled={!dirty || busy} onClick={() => setDraft(structuredClone(saved))}><X size={13} />放弃修改</button>
-        <button className="tp-btn" disabled={!canEdit || busy} onClick={reset}><RotateCcw size={13} />恢复默认</button>
-        <button className="tp-btn primary" disabled={!canEdit || !dirty || busy || invalid > 0} onClick={save}>{busy ? <Loader2 size={13} className="tp-spin" /> : <Save size={13} />}保存</button>
+        <small>{isJudge ? `${saved.updatedBy} · ${saved.updatedAt.slice(0, 16).replace('T', ' ')}${saved.changeNote ? ` · ${saved.changeNote}` : ''}` : '配置了模型时，这些规则只负责找候选和给提示，并守住否决、高风险两条护栏'}</small>
+        {dirty && <span className="rp-tag is-orange">有未保存的修改</span>}
+        {invalid > 0 && <span className="rp-tag is-red">{invalid} 条正则无效</span>}
+        {!canEdit && <span className="rp-tag is-gray">只读：主管或管理员才能保存</span>}
+        <span className="rp-grow" />
+        {msg && <span className={'rp-msg is-' + msg.tone}>{msg.text}</span>}
+        {isJudge && <button className="rp-btn" disabled={!dirty || busy} onClick={() => setDraft(structuredClone(saved))}><X size={13} />放弃修改</button>}
+        {isJudge && <button className="rp-btn" disabled={!canEdit || busy} onClick={reset}><RotateCcw size={13} />恢复默认</button>}
+        <button className="rp-btn primary" disabled={!canEdit || !dirty || busy || invalid > 0} onClick={save}>{busy ? <Loader2 size={13} className="tp-spin" /> : <Save size={13} />}保存为 v{saved.version + 1}</button>
       </div>
-      {testOpen && <RuleTester api={api} draft={draft} dirty={dirty} />}
-      <div className="tp-rule-body">
-        <nav className="tp-card tp-groups">
+      <div className={'rp-cols' + (tester && !isJudge ? ' has-tester' : '')}>
+        <nav className="rp-card rp-groups">
           {GROUPS.map((x) => (
             <button key={x.key} className={group === x.key ? 'on' : ''} onClick={() => setGroup(x.key)}>
-              <span className="tp-grow">{x.label}</span><span className="tp-muted">{x.step}</span><i>{count(x.key)}</i>
+              <span><b>{x.label}</b><small>{x.step}</small></span><i>{count(x.key)}</i>
             </button>
           ))}
         </nav>
-        <section className="tp-card tp-group">
-          <div className="tp-card-head"><b>{g.label}</b><span className="tp-muted">{g.step}</span></div>
-          <p className="tp-hint">{g.hint}</p>
+        <section className="rp-card rp-group">
+          {isJudge ? null : <div className="rp-group-head"><b>{g.label} · {count(group)} {group === 'options' ? '项' : '条'}</b></div>}
+          {isJudge ? null : <p className="rp-hint">{g.hint}</p>}
           <fieldset disabled={!canEdit} className="tp-fieldset">
-            {group === 'judge' && <JudgeForm value={draft.judge} onChange={(v) => set('judge', v)} />}
+            {group === 'judge' && <JudgeForm value={draft.judge} onChange={(v) => set('judge', v)} model={model} policySource={policySource} />}
             {group === 'fileRoles' && (
               <RuleList items={draft.fileRoles} onChange={(v) => set('fileRoles', v)} add={() => ({ id: newId('fr'), role: 'other' as FileRole, label: '新角色', namePatterns: [], contentKeywords: [], precedence: 30, extractClauses: true, enabled: true })}
                 render={(r, up) => (<>
@@ -223,55 +222,102 @@ function RuleConfig({ api, onSaved }: { api: Api; onSaved?: () => void }) {
             )}
           </fieldset>
         </section>
+        {tester && !isJudge && <RuleTester api={api} draft={draft} dirty={dirty} onClose={() => setTester(false)} />}
       </div>
     </div>
   );
 }
 
-function JudgeForm({ value, onChange }: { value: JudgeConfig; onChange: (v: JudgeConfig) => void }) {
+/** 示例来源：出厂默认的几条有固定编号；人工改判转来的带「人工改判」说明；其余是在这里手工加的 */
+const FACTORY_EXAMPLES = new Set(['ex-reject', 'ex-must', 'ex-shall', 'ex-cn-reject', 'ex-cn-shall', 'ex-def']);
+const EX_SOURCE = (e: { id: string; note?: string }) => (e.note?.startsWith('人工改判') ? ['自动生效 · 来自改判', 'green'] : FACTORY_EXAMPLES.has(e.id) ? ['出厂', 'gray'] : ['人工添加', 'gray']);
+function JudgeForm({ value, onChange, model, policySource }: { value: JudgeConfig; onChange: (v: JudgeConfig) => void; model: string | null; policySource: Record<string, string> }) {
   const up = (p: Partial<JudgeConfig>) => onChange({ ...value, ...p });
+  const setEx = (i: number, p: Partial<JudgeConfig['examples'][number]>) => up({ examples: value.examples.map((x, j) => (j === i ? { ...x, ...p } : x)) });
   return (
-    <div className="tp-judge">
-      <label className="tp-check"><input type="checkbox" checked={value.enabled} onChange={(e) => up({ enabled: e.target.checked })} />启用模型判断（没配模型时自动用规则结果）</label>
-      <Row label="提示词" wide><textarea className="tp-judge-text" value={value.prompt} onChange={(e) => up({ prompt: e.target.value })} /></Row>
-      <Row label="公司口径（每行一条）" wide>
-        <textarea className="tp-judge-text short" value={value.policies.join('\n')} placeholder="例如：质保超过 10 年算高风险" onChange={(e) => up({ policies: e.target.value.split('\n') })} onBlur={() => up({ policies: value.policies.map((p) => p.trim()).filter(Boolean) })} />
-      </Row>
-      <div className="tp-options">
-        <Row label="每批条款数"><input type="number" min={1} max={100} value={value.batchSize} onChange={(e) => up({ batchSize: Number(e.target.value) })} className="tp-narrow" /></Row>
-        <Row label="同时调用批数"><input type="number" min={1} max={20} value={value.concurrency} onChange={(e) => up({ concurrency: Number(e.target.value) })} className="tp-narrow" /></Row>
-        <Row label="低于此置信度标待确认"><input type="number" step={0.05} min={0} max={1} value={value.minConfidence} onChange={(e) => up({ minConfidence: Number(e.target.value) })} className="tp-narrow" /></Row>
+    <div className="rp-judge">
+      <div className="rp-judge-head">
+        <b>模型判断</b>
+        <label className="tp-switch"><input type="checkbox" checked={value.enabled} onChange={(e) => up({ enabled: e.target.checked })} /><i /></label>
+        <small>{value.enabled ? '已启用' : '已停用'} · {model || '未配置模型'} · 未配置模型时自动用规则结果</small>
+        <span className="rp-grow" />
+        <label className="rp-num">每批<input type="number" min={1} max={100} value={value.batchSize} onChange={(e) => up({ batchSize: Number(e.target.value) })} /></label>
+        <label className="rp-num">并发<input type="number" min={1} max={20} value={value.concurrency} onChange={(e) => up({ concurrency: Number(e.target.value) })} /></label>
+        <label className="rp-num">低于此置信度标待确认<input type="number" step={0.05} min={0} max={1} value={value.minConfidence} onChange={(e) => up({ minConfidence: Number(e.target.value) })} /></label>
       </div>
-      <b>标注示例 · {value.examples.length}</b>
-      <RuleList items={value.examples} onChange={(v) => up({ examples: v })} add={() => ({ id: newId('ex'), text: '', isRequirement: true, category: 'technical' as TenderCategory, strength: 'required' as Strength, enabled: true })} addLabel="新增示例"
-        render={(r, set1) => (<>
-          <Row label="条款原文" wide><textarea className="tp-judge-text short" value={r.text} onChange={(e) => set1({ text: e.target.value })} /></Row>
-          <Row label="判断"><label className="tp-check"><input type="checkbox" checked={r.isRequirement} onChange={(e) => set1({ isRequirement: e.target.checked })} />属于要求</label></Row>
-          {r.isRequirement && <Row label="类别 / 强度"><select value={r.category} onChange={(e) => set1({ category: e.target.value as TenderCategory })}>{TENDER_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}</select><select value={r.strength} onChange={(e) => set1({ strength: e.target.value as Strength })}>{Object.entries(STRENGTH_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Row>}
-          <Row label="说明" wide><input value={r.note || ''} onChange={(e) => set1({ note: e.target.value || undefined })} /></Row>
-        </>)} />
+      <div className="rp-judge-cols">
+        <div className="rp-judge-col">
+          <h5>提示词</h5>
+          <textarea className="rp-prompt" value={value.prompt} onChange={(e) => up({ prompt: e.target.value })} />
+          <h5>公司口径（每条一句）<button className="rp-link" onClick={() => up({ policies: [...value.policies, ''] })}>+ 新增口径</button></h5>
+          {!value.policies.length && <p className="rp-hint">还没有口径。改进建议里通过审批的口径会出现在这里。</p>}
+          {value.policies.map((p, i) => (
+            <div key={i} className="rp-policy">
+              <input value={p} placeholder="例如：质保超过 10 年算高风险" onChange={(e) => up({ policies: value.policies.map((x, j) => (j === i ? e.target.value : x)) })} onBlur={() => up({ policies: value.policies.map((x) => x.trim()).filter(Boolean) })} />
+              <span className={'rp-tag ' + (policySource[p] ? 'is-purple' : 'is-plain')}>{policySource[p] || '人工添加'}</span>
+              <button className="rp-icon" title="删除" onClick={() => up({ policies: value.policies.filter((_, j) => j !== i) })}><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+        <div className="rp-judge-col">
+          <h5>标注示例 · {value.examples.length}<button className="rp-link" onClick={() => up({ examples: [...value.examples, { id: newId('ex'), text: '', isRequirement: true, category: 'technical' as TenderCategory, strength: 'required' as Strength, enabled: true }] })}>+ 新增示例</button></h5>
+          {value.examples.map((x, i) => {
+            const [src, tone] = EX_SOURCE(x);
+            return (
+              <div key={x.id} className={'rp-example' + (x.enabled ? '' : ' off')}>
+                <textarea value={x.text} rows={2} placeholder="条款原文" onChange={(e) => setEx(i, { text: e.target.value })} />
+                <div className="rp-example-foot">
+                  <select className="rp-chip is-blue" value={x.isRequirement ? `${x.category}|${x.strength || ''}` : 'no'} onChange={(e) => { const v = e.target.value; if (v === 'no') setEx(i, { isRequirement: false, category: undefined, strength: undefined }); else { const [c, s] = v.split('|'); setEx(i, { isRequirement: true, category: c as TenderCategory, strength: (s || undefined) as Strength | undefined }); } }}>
+                    <option value="no">不是要求</option>
+                    {TENDER_CATEGORIES.flatMap((c) => Object.entries(STRENGTH_LABEL).map(([s, l]) => <option key={c.key + s} value={`${c.key}|${s}`}>{c.label} · {l}</option>))}
+                  </select>
+                  <span className={'rp-tag is-' + tone}>{src}</span>
+                  {x.note && <small title={x.note}>{x.note}</small>}
+                  <span className="rp-grow" />
+                  <label className="tp-switch" title={x.enabled ? '已启用' : '已停用'}><input type="checkbox" checked={x.enabled} onChange={(e) => setEx(i, { enabled: e.target.checked })} /><i /></label>
+                  <button className="rp-icon" title="删除" onClick={() => up({ examples: value.examples.filter((_, j) => j !== i) })}><Trash2 size={13} /></button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
 
+const ruleTag = (r: Record<string, unknown>): [string, string] | null => {
+  if (r.strength) return [STRENGTH_LABEL[r.strength as Strength].replace('禁止 / ', ''), r.strength === 'prohibited' ? 'red' : r.strength === 'mandatory' ? 'dark' : 'gray'];
+  if (r.severity) return [`${SEV_LABEL[r.severity as Severity]}风险`, r.severity === 'high' ? 'red' : r.severity === 'medium' ? 'orange' : 'gray'];
+  if (r.category) return [CAT_LABEL[r.category as TenderCategory], 'gray'];
+  if (r.role) return [ROLE_LABEL[r.role as FileRole], 'gray'];
+  if (r.level) return [`${r.level} 级`, 'gray'];
+  return null;
+};
+const ruleLine = (r: Record<string, unknown>) => String(r.pattern ?? [...((r.namePatterns as string[]) || []), ...((r.keywords as string[]) || []), ...((r.contentKeywords as string[]) || [])].join(' | '));
 function RuleList<T extends { id: string; enabled: boolean }>({ items, onChange, add, render, addLabel = '新增规则' }: {
   items: T[]; onChange: (v: T[]) => void; add: () => T; render: (r: T, up: (p: Partial<T>) => void) => React.ReactNode; addLabel?: string;
 }) {
+  const [open, setOpen] = useState<string | null>(null);
   return (
-    <div className="tp-rule-list">
+    <div className="rp-rule-list">
       {items.map((r, i) => {
         const up = (p: Partial<T>) => onChange(items.map((x, j) => (j === i ? { ...x, ...p } : x)));
+        const rec = r as unknown as Record<string, unknown>;
+        const tag = ruleTag(rec);
         return (
-          <div key={r.id} className={'tp-rule' + (r.enabled ? '' : ' off')}>
-            <div className="tp-rule-side">
-              <label className="tp-switch" title={r.enabled ? '已启用' : '已停用'}><input type="checkbox" checked={r.enabled} onChange={(e) => up({ enabled: e.target.checked } as Partial<T>)} /><i /></label>
-              <button className="tp-icon" title="删除" onClick={() => onChange(items.filter((_, j) => j !== i))}><Trash2 size={13} /></button>
+          <div key={r.id} className={'rp-rule' + (r.enabled ? '' : ' off') + (open === r.id ? ' open' : '')}>
+            <div className="rp-rule-row" onClick={() => setOpen(open === r.id ? null : r.id)}>
+              <label className="tp-switch" title={r.enabled ? '已启用' : '已停用'} onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={r.enabled} onChange={(e) => up({ enabled: e.target.checked } as Partial<T>)} /><i /></label>
+              <span className="rp-rule-main"><b>{String(rec.label || rec.key || '')}</b><code>{ruleLine(rec) || '—'}</code></span>
+              {tag && <span className={'rp-tag is-' + tag[1]}>{tag[0]}</span>}
+              <button className="rp-icon" title="删除" onClick={(e) => { e.stopPropagation(); onChange(items.filter((_, j) => j !== i)); }}><Trash2 size={13} /></button>
             </div>
-            <div className="tp-rule-grid">{render(r, up)}</div>
+            {open === r.id && <div className="tp-rule-grid rp-rule-edit">{render(r, up)}</div>}
           </div>
         );
       })}
-      <button className="tp-btn tp-add" onClick={() => onChange([...items, add()])}><Plus size={13} />{addLabel}</button>
+      <button className="rp-link rp-add" onClick={() => { const n = add(); onChange([...items, n]); setOpen(n.id); }}>+ {addLabel}</button>
     </div>
   );
 }
@@ -316,7 +362,7 @@ Section 5 Commercial Terms
 第四章 投标须知
 投标截止时间：2026年11月20日 10:00，投标有效期 90 日历天。`;
 
-function RuleTester({ api, draft, dirty }: { api: Api; draft: TenderRuleSet; dirty: boolean }) {
+function RuleTester({ api, draft, dirty, onClose }: { api: Api; draft: TenderRuleSet; dirty: boolean; onClose: () => void }) {
   const [text, setText] = useState(SAMPLE_TEXT);
   const [res, setRes] = useState<{ clauses: RulePreviewClause[]; sections: string[] } | null>(null);
   const [err, setErr] = useState('');
@@ -326,32 +372,22 @@ function RuleTester({ api, draft, dirty }: { api: Api; draft: TenderRuleSet; dir
     catch (e) { setErr((e as Error).message); }
   }
   return (
-    <div className="tp-card tp-tester">
-      <div className="tp-card-head"><FlaskConical size={14} /><b>规则试跑</b><span className="tp-muted">{dirty ? '用页面上未保存的规则' : '用当前已保存的规则'}跑第 3–5 步，不落库</span></div>
-      <div className="tp-tester-body">
-        <div className="tp-tester-in">
-          <textarea value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
-          <button className="tp-btn primary" onClick={run}><FlaskConical size={13} />运行</button>
-          {err && <div className="tone-red tp-small">{err}</div>}
-        </div>
-        <div className="tp-tester-out">
-          {!res && <p className="tp-muted">贴一段招标文件原文，点「运行」看每条条款被切成什么、命中了哪些规则。</p>}
-          {res && <div className="tp-muted tp-small">识别到 {res.sections.length} 个章节、{res.clauses.length} 条条款</div>}
-          {res?.clauses.map((c, i) => (
-            <div key={i} className="tp-pv">
-              <div className="tp-pv-tags">
-                {c.category ? <span className={'tp-cat c-' + c.category}>{CAT_LABEL[c.category]} {c.score}</span> : <span className="tp-pill gray">未分类</span>}
-                {c.strength && <span className={'tp-pill ' + (c.strength === 'prohibited' ? 'red' : c.strength === 'mandatory' ? 'dark' : 'gray')} title={c.mandatoryRule}>{STRENGTH_LABEL[c.strength]}</span>}
-                {c.risks.map((r) => <span key={r} className="tp-pill sev-high">{r}</span>)}
-                {c.fields.map((f) => <span key={f.label} className="tp-pill blue">{f.label}：{f.value}</span>)}
-                <span className="tp-muted tp-small">{c.section}</span>
-              </div>
-              <div className="tp-pv-text">{c.text}</div>
-            </div>
-          ))}
-        </div>
+    <aside className="rp-card rp-tester">
+      <div className="rp-group-head"><FlaskConical size={14} /><b>试跑</b><small>{dirty ? '用页面上未保存的规则' : '用当前已保存的规则'}，不落库</small><span className="rp-grow" /><button className="rp-icon" title="收起" onClick={onClose}><X size={13} /></button></div>
+      <textarea className="rp-tester-in" value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
+      <div className="rp-tester-bar"><span className="rp-grow">{err && <span className="is-red">{err}</span>}</span><button className="rp-btn primary" onClick={run}><Play size={13} />运行</button></div>
+      {res && <small className="rp-muted">识别到 {res.sections.length} 个章节、{res.clauses.length} 条条款</small>}
+      <div className="rp-tester-out">
+        {!res && <p className="rp-hint">贴一段招标文件原文，点「运行」看每条条款被切成什么、命中了哪些规则。</p>}
+        {res?.clauses.map((c, i) => (
+          <div key={i} className="rp-pv">
+            <div className="rp-pv-text">{c.text}</div>
+            <small>规则：{c.category ? `${CAT_LABEL[c.category]}（${c.score} 分）` : '未分类'}{c.strength ? ` · ${STRENGTH_LABEL[c.strength]}` : ''}{c.risks.length ? ` · 风险 ${c.risks.join('、')}` : ''}{c.fields.length ? ` · ${c.fields.map((f) => `${f.label}：${f.value}`).join('；')}` : ''}</small>
+          </div>
+        ))}
       </div>
-    </div>
+    </aside>
   );
+
 }
 

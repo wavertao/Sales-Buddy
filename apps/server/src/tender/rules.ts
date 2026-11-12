@@ -112,7 +112,9 @@ export const ruleSnapshot = (version: number) => get<TenderRuleSet>('tender_rule
 
 export function ruleHistory() {
   return list<TenderRuleSet>('tender_rules_history')
-    .map((r) => ({ version: r.version, updatedAt: r.updatedAt, updatedBy: r.updatedBy, changeNote: r.changeNote || '', policies: r.judge?.policies.length ?? 0, examples: r.judge?.examples.filter((e) => e.enabled).length ?? 0 }))
+    .map((r) => ({ version: r.version, updatedAt: r.updatedAt, updatedBy: r.updatedBy, changeNote: r.changeNote || '', policies: r.judge?.policies.length ?? 0, examples: r.judge?.examples.filter((e) => e.enabled).length ?? 0,
+      // 版本对比用：口径原文和几项判断参数
+      policyList: r.judge?.policies ?? [], batchSize: r.judge?.batchSize, concurrency: r.judge?.concurrency, minConfidence: r.judge?.minConfidence, rules: r.mandatory.length + r.categories.length + r.risks.length + r.fields.length + r.headings.length + r.fileRoles.length }))
     .sort((a, b) => b.version - a.version)
     .slice(0, 30);
 }
