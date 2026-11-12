@@ -186,3 +186,10 @@
 .rp-seg button.on { background: var(--rp-blue-bg); color: var(--rp-blue); font-weight: 700; }
 .rp-tag.is-blue { background: var(--rp-blue-bg); color: var(--rp-blue); }
 @media (max-width: 1280px) { .ck-cols.is-three { grid-template-columns: 220px minmax(0, 1fr); } .ck-cols.is-three > .ck-side { display: none; } }
+
+/* 修正：fieldset 去边框；开关、数字输入横排 */
+.rp-shell fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.rp-shell .ck-switch, .rp-shell .ck-nums label { flex-direction: row; }
+.rp-shell .ck-switch .tp-switch { display: inline-block; }
+.rp-shell .tp-switch { display: inline-block; }
+.ck-field > .rp-link, .ck-checks > .rp-link { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; }

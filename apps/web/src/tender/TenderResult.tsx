@@ -176,9 +176,9 @@ export function ReviewSummary({ r }: { r: TenderParseResult }) {
   const tone = (x: typeof rows[number]) => (!x.mine.length ? ['没找到', 'gray'] : x.red.length ? ['触碰红线', 'red'] : x.review.length ? ['待确认', 'orange'] : ['已找到', 'green']);
   return (
     <div className="tp-card">
-      <div className="tp-card-head"><ListChecks size={14} /><b>审查结论</b><span className="tp-muted">按审查清单逐项：{list.length} 项里找到 {found} 项，{rows.filter((x) => x.red.length).length} 项触碰红线</span></div>
+      <div className="tp-card-head"><ListChecks size={14} /><b>审查结论</b><span className="tp-muted">按审查清单逐项：{list.length} 项里找到 {found} 项，{rows.filter((x) => x.red.length).length} 项有否决或高风险</span></div>
       <table className="tp-table">
-        <thead><tr><th>大类</th><th>审查项</th><th>结论</th><th>条数</th><th>红线 / 待确认</th><th>要点</th></tr></thead>
+        <thead><tr><th>大类</th><th>审查项</th><th>结论</th><th>条数</th><th>否决·高风险 / 待确认</th><th>要点</th></tr></thead>
         <tbody>
           {rows.sort((a, b) => TENDER_CATEGORIES.findIndex((c) => c.key === a.ri.category) - TENDER_CATEGORIES.findIndex((c) => c.key === b.ri.category)).map((x) => {
             const [label, t] = tone(x);
