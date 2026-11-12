@@ -1,4 +1,5 @@
 import type { TenderRuleSet } from '../../../../packages/contracts/tender.ts';
+import { DEFAULT_LOCKED } from './judge.ts';
 
 /**
  * 出厂规则：按储能（BESS）招标中英文样本整理（SECI DC/AC 包、Entergy、CEB、衢州 EPC、江苏光储充等）。
@@ -132,6 +133,7 @@ export const DEFAULT_RULES: Omit<TenderRuleSet, 'version' | 'updatedAt' | 'updat
 
 ## 中文要点的写法
 一句话、不超过 40 字，写「谁 + 做什么 + 门槛」，例如「投标人须提交 UL9540A 大规模燃烧测试报告」。`,
+    locked: DEFAULT_LOCKED,
     policies: [],
     examples: [
       { id: 'ex-reject', text: 'Bids without the earnest money deposit will be rejected as non-responsive.', isRequirement: true, category: 'commercial', strength: 'prohibited', note: '不交保证金直接废标', enabled: true },

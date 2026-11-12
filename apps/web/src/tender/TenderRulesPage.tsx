@@ -81,7 +81,7 @@ const newId = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 
 const ADVANCED = new Set<GroupKey>(['fileRoles', 'headings', 'fields', 'options']);
 function RuleConfig({ api, mode, group, setGroup, tester, setTester, model, policySource, onSaved }: { api: Api; mode: 'prompt' | 'items' | 'guards'; group: GroupKey; setGroup: (g: GroupKey) => void; tester: boolean; setTester: (v: boolean) => void; model: string | null; policySource: Record<string, string>; onSaved?: () => void }) {
-  const [locked, setLocked] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [saved, setSaved] = useState<TenderRuleSet | null>(null);
   const [draft, setDraft] = useState<TenderRuleSet | null>(null);
   const [canEdit, setCanEdit] = useState(false);
@@ -89,7 +89,7 @@ function RuleConfig({ api, mode, group, setGroup, tester, setTester, model, poli
   const [busy, setBusy] = useState(false);
   const [showAdv, setShowAdv] = useState(false);
 
-  const load = () => api('/tender/rules').then((j) => { setSaved(j.rules); setDraft(structuredClone(j.rules)); setCanEdit(j.canEdit); setLocked(j.locked || ''); });
+  const load = () => api('/tender/rules').then((j) => { setSaved(j.rules); setDraft(structuredClone(j.rules)); setCanEdit(j.canEdit); setIsAdmin(!!j.isAdmin); });
   useEffect(() => { load().catch((e) => setMsg({ tone: 'red', text: e.message })); }, []);
   const dirty = useMemo(() => !!saved && !!draft && JSON.stringify(saved) !== JSON.stringify(draft), [saved, draft]);
   const invalid = useMemo(() => {
@@ -257,7 +257,7 @@ function RuleConfig({ api, mode, group, setGroup, tester, setTester, model, poli
         <button className="rp-btn primary" disabled={!canEdit || !dirty || busy || invalid > 0} onClick={save}>{busy ? <Loader2 size={13} className="tp-spin" /> : <Save size={13} />}保存为 v{saved.version + 1}</button>
       </div>
       <fieldset disabled={!canEdit} className="tp-fieldset">
-        {mode === 'prompt' && <PromptPanel value={draft.judge} onChange={(v) => set('judge', v)} locked={locked} model={model} policySource={policySource} />}
+        {mode === 'prompt' && <PromptPanel value={draft.judge} onChange={(v) => set('judge', v)} isAdmin={isAdmin} model={model} policySource={policySource} />}
         {mode === 'items' && <ChecklistEditor api={api} items={draft.items || []} onChange={(v) => set('items', v)} examples={draft.judge.examples} canEdit={canEdit} />}
       </fieldset>
       {mode === 'guards' && <GuardsEditor value={draft.guards || { mustWords: [], standards: [] }} onChange={(v) => set('guards', v)} fields={draft.fields} onFields={(id, cc) => set('fields', draft.fields.map((x) => (x.id === id ? { ...x, checkConflict: cc } : x)))} advanced={advanced} />}

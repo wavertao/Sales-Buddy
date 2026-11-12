@@ -9,7 +9,7 @@ import { getJob, getRun, listRuns, listSamples, parseSample, parseUpload } from 
 import { generateSuggestions, library, publish, reject, replay, suggestions, versions } from './evolve.ts';
 import { record } from '../db.ts';
 import { modelStatus } from '../model.ts';
-import { defaultModelCall, lockedInstructions } from './judge.ts';
+import { defaultModelCall } from './judge.ts';
 import type { TenderRuleSet } from '../../../../packages/contracts/tender.ts';
 
 /**
@@ -29,7 +29,7 @@ const editor = (res: express.Response) => {
 };
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 120 * 1024 * 1024, files: 60, fields: 4 } });
 
-r.get('/tender/rules', (_req, res) => res.json({ rules: getRules(), canEdit: ['admin', 'manager'].includes(user(res).role), model: modelStatus().configured ? modelStatus().model : null, locked: lockedInstructions(['（风险名词表，来自风险规则）']) }));
+r.get('/tender/rules', (_req, res) => res.json({ rules: getRules(), canEdit: ['admin', 'manager'].includes(user(res).role), model: modelStatus().configured ? modelStatus().model : null, isAdmin: user(res).role === 'admin' }));
 /**
  * 审查项的检索词由 AI 生成：中英文同义说法、缩写、常见写法，保证相关条款一定送审。
  * 没配模型时退回用名称和「要审什么」里的词。只发审查项的名称和说明，不发标书内容。

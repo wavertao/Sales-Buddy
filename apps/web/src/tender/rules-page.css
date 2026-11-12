@@ -194,3 +194,15 @@
 .rp-shell .ck-switch .tp-switch { display: inline-block; }
 .rp-shell .tp-switch { display: inline-block; }
 .ck-field > .rp-link, .ck-checks > .rp-link { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; }
+
+/* 标准提示词：一个文档框；锁定段管理员可改；判例可加可改 */
+.ck-prompt { width: 100%; border: 1px solid var(--rp-line); border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 12.5px; line-height: 1.75; color: var(--rp-ink); resize: vertical; }
+.ck-prompt.is-locked { background: var(--rp-bg); }
+.ck-locked { margin: 0; white-space: pre-wrap; font-family: inherit; font-size: 12px; line-height: 1.7; color: var(--rp-sub); background: var(--rp-bg); border-radius: 8px; padding: 10px 12px; }
+.ck-ex { border: 1px solid var(--rp-line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.ck-ex.off { opacity: .55; }
+.ck-ex textarea { border: 0; resize: vertical; font: inherit; font-size: 12px; line-height: 1.6; color: var(--rp-ink); outline: none; padding: 0; }
+.ck-ex-foot { display: flex; align-items: center; gap: 8px; }
+.ck-ex-foot select { height: 26px; border: 1px solid var(--rp-line); border-radius: 6px; font: inherit; font-size: 11.5px; color: var(--rp-blue); background: var(--rp-blue-bg); padding: 0 4px; font-weight: 600; }
+.ck-ex-foot input { flex: 1; min-width: 0; height: 26px; border: 1px solid transparent; border-radius: 6px; padding: 0 6px; font: inherit; font-size: 11.5px; color: var(--rp-sub); background: transparent; }
+.ck-ex-foot input:hover, .ck-ex-foot input:focus { border-color: var(--rp-line); background: #fff; }

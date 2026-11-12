@@ -5,6 +5,7 @@ import type { User } from '../../../../packages/contracts/index.ts';
 import type { TenderRuleSet } from '../../../../packages/contracts/tender.ts';
 import { DEFAULT_RULES } from './default-rules.ts';
 import { DEFAULT_GUARDS, DEFAULT_ITEMS } from './default-checklist.ts';
+import { DEFAULT_LOCKED } from './judge.ts';
 
 /** 规则存储：documents 表 tender_rules/active 存当前版本，tender_rules_history/v{n} 留每次保存的快照。 */
 const ACTIVE = 'active';
@@ -63,6 +64,7 @@ export const ruleSetSchema = z.object({
     batchSize: z.number().int().min(1).max(100),
     concurrency: z.number().int().min(1).max(20),
     minConfidence: z.number().min(0).max(1),
+    locked: z.string().min(1, '锁定段不能为空').max(8000).refine((s) => s.includes('"results"'), '锁定段的输出格式里必须保留 "results" 结构，程序靠它解析结果').optional(),
   }),
   items: z.array(z.object({
     id, category, name: label, ask: z.string().max(600), focus: z.array(z.string().min(1).max(300)).max(20),
@@ -86,7 +88,7 @@ function seedDefault(): TenderRuleSet {
 /** 早期保存的规则没有 judge / 审查清单 / 兜底规则，读取时补上默认值。 */
 const withJudge = (r: TenderRuleSet): TenderRuleSet => ({
   ...r,
-  judge: r.judge || structuredClone(DEFAULT_RULES.judge),
+  judge: r.judge ? { ...r.judge, locked: r.judge.locked || DEFAULT_LOCKED } : structuredClone(DEFAULT_RULES.judge),
   items: r.items || structuredClone(DEFAULT_ITEMS),
   guards: r.guards || structuredClone(DEFAULT_GUARDS),
 });
@@ -109,6 +111,8 @@ export function saveRules(user: User, body: unknown): TenderRuleSet {
   const parsed = ruleSetSchema.parse(body);
   const cur = getRules();
   if (parsed.version !== cur.version) throw new AppError('CONFLICT', `规则已被他人更新到 v${cur.version}，请刷新后再改`, 409);
+  // 锁定段（安全约束、适用方、输出格式）程序依赖，只给管理员改
+  if ((parsed.judge.locked ?? '') !== (cur.judge.locked ?? '') && user.role !== 'admin') throw new AppError('FORBIDDEN', '安全约束、适用方、输出格式只有管理员能改', 403);
   const ids = new Set<string>();
   for (const group of [parsed.fileRoles, parsed.headings, parsed.categories, parsed.mandatory, parsed.fields, parsed.risks]) {
     for (const r of group) { if (ids.has(r.id)) throw new AppError('INVALID_ARGUMENT', `规则编号重复：${r.id}`, 400); ids.add(r.id); }

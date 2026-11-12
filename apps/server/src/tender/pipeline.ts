@@ -104,6 +104,13 @@ export function segment(c: Compiled, pages: { page: number; text: string }[]): {
   let lead: string | undefined;
   let bufEnum = false;
   const LEAD_CAP = 160;
+  // 引导语只带给紧跟着的一串列表项：最多 12 项、换页就停。Term Sheet 里一句「Change in Law means any of the following:」
+  // 曾经一路串到后面几十条不相干的条款上（2026-11-12 Bungaban 实测）
+  let leadLeft = 0, leadPage = 0;
+  const LEAD_ITEMS = 12;
+  // 只有带义务语气的才算引导语；「X means any of the following:」是定义，不给后面的条款加主语
+  const LEAD_CUE = /\b(must|shall|will|is required|are required|agrees? to|undertakes? to|responsible for|obligations?)\b|须|应|必须|不得|负责|承担/i;
+  const DEFINITION = /\b(means|includes?|defined as)\b|是指|系指|定义/i;
 
   const pushPiece = (text: string, page: number) => {
     const t = text.replace(/\s+/g, ' ').trim();
@@ -115,7 +122,8 @@ export function segment(c: Compiled, pages: { page: number; text: string }[]): {
   };
   const flush = () => {
     if (!buf.trim()) { buf = ''; return; }
-    const prefix = bufEnum && lead ? lead + ' ' : '';
+    const prefix = bufEnum && lead && leadLeft > 0 && bufPage - leadPage <= 1 ? lead + ' ' : '';
+    if (prefix) leadLeft--;
     if (buf.length <= max) pushPiece(prefix + buf, bufPage);
     else {
       let cur = '';
@@ -128,7 +136,8 @@ export function segment(c: Compiled, pages: { page: number; text: string }[]): {
     // 普通段落以冒号结尾就是新的引导语；普通段落不以冒号结尾，说明列表结束了
     if (!bufEnum) {
       const tail = buf.trim().split(SENTENCE_SPLIT).pop()!.trim();
-      lead = /[:：]$/.test(tail) ? tail.slice(-LEAD_CAP) : undefined;
+      lead = /[:：]$/.test(tail) && LEAD_CUE.test(tail) && !DEFINITION.test(tail) ? tail.slice(-LEAD_CAP) : undefined;
+      leadLeft = lead ? LEAD_ITEMS : 0; leadPage = bufPage;
     }
     buf = '';
     bufEnum = false;

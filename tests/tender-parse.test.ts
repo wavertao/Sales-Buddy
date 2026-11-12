@@ -590,7 +590,8 @@ test('TENDER-21 审查清单三层：审查项注入提示词；AI 抽数值、�
   }, 'model', `fake-21-${Date.now()}`);
   const r = await parsePackage(rules, '包', [txt('合同.txt', text)], 'upload', { judge });
   assert.match(sys, /\[ri-ld\] 违约金/, '审查项注入提示词');
-  assert.match(sys, /输出格式（锁定）/);
+  assert.match(sys, /## 输出格式/);
+  assert.match(sys, /口径和数值名一致/, '数值口径一致才填');
   const ld = r.items.find((i) => i.text.includes('liquidated'))!;
   assert.equal(ld.reviewItem, 'ri-ld');
   assert.ok(ld.risks.some((x) => x.severity === 'high' && x.label.includes('累计上限')), '15% > 10% → 程序判高风险，AI 判一般也要保留');
@@ -605,4 +606,20 @@ test('TENDER-21 审查清单三层：审查项注入提示词；AI 抽数值、�
   // 只注入相关审查项：一批全是技术类时不带商务审查项
   const s2 = itemsSection([{ key: 'k', text: 'x', section: '', fileName: '', fileRole: 'itb', hint: { category: 'technical', risks: [] } }], rules.items!);
   assert.ok(s2.includes('ri-cert') && !s2.includes('ri-ld'));
+});
+
+test('TENDER-22 锁定段（安全约束、适用方、输出格式）只有管理员能改，且必须保留 results 结构', async () => {
+  const { getRules, saveRules } = await import('../apps/server/src/tender/rules.ts');
+  const C = await import('../apps/server/src/crm.ts');
+  const admin = C.user('U-ADMIN');
+  const cur = getRules();
+  const manager = { ...admin, role: 'manager' as const };
+  const edited = { ...structuredClone(cur), judge: { ...cur.judge, locked: cur.judge.locked + '\n补充：不要输出 Markdown。' } };
+  assert.throws(() => saveRules(manager, edited), /只有管理员能改/);
+  assert.throws(() => saveRules(admin, { ...edited, judge: { ...edited.judge, locked: '随便写' } }), /results/);
+  const ok = saveRules(admin, edited);
+  assert.match(ok.judge.locked!, /不要输出 Markdown/);
+  // 主管改别的地方不受影响
+  const next = saveRules(manager, { ...structuredClone(ok), judge: { ...ok.judge, prompt: ok.judge.prompt + '\n多看付款条件。' } });
+  assert.match(next.judge.prompt, /多看付款条件/);
 });

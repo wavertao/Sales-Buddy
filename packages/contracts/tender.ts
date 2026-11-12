@@ -84,6 +84,8 @@ export interface JudgeConfig {
   batchSize: number; concurrency: number;
   /** 置信度低于此值的结论标待确认 */
   minConfidence: number;
+  /** 锁定段：安全约束、适用方、输出格式。程序依赖输出格式解析结果，只有管理员能改；{{风险名词表}} 处填入风险规则名 */
+  locked?: string;
 }
 export interface TenderOptions {
   /** 每页可抽字符数低于该值视为扫描页 */

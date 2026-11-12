@@ -15,29 +15,26 @@ const newId = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 const Tag = ({ tone, children }: { tone: string; children: React.ReactNode }) => <span className={'rp-tag is-' + tone}>{children}</span>;
 
 // ======================= 标准提示词 =======================
-/** 提示词按「## 小标题」切段，每段一个输入框；锁定部分（代码里的固定指令）只读展示 */
-const splitSections = (s: string) => {
-  const parts = s.split(/\n(?=## )/).map((p) => p.trim()).filter(Boolean);
-  return parts.map((p) => { const m = p.match(/^## (.+)\n?([\s\S]*)$/); return m ? { title: m[1].trim(), body: m[2].trim() } : { title: '说明', body: p }; });
-};
-const joinSections = (xs: { title: string; body: string }[]) => xs.map((x) => `## ${x.title}\n${x.body}`).join('\n\n');
-
-export function PromptPanel({ value, onChange, locked, model, policySource }: { value: JudgeConfigLike; onChange: (v: JudgeConfigLike) => void; locked: string; model: string | null; policySource: Record<string, string> }) {
-  const secs = useMemo(() => splitSections(value.prompt), [value.prompt]);
+const STRENGTHS: [string, string][] = [['prohibited', '否决'], ['mandatory', '强制'], ['required', '一般要求'], ['recommended', '建议']];
+export function PromptPanel({ value, onChange, isAdmin, model, policySource }: { value: JudgeConfigLike; onChange: (v: JudgeConfigLike) => void; isAdmin: boolean; model: string | null; policySource: Record<string, string> }) {
   const up = (p: Partial<JudgeConfigLike>) => onChange({ ...value, ...p });
-  const setSec = (i: number, body: string) => up({ prompt: joinSections(secs.map((s, j) => (j === i ? { ...s, body } : s))) });
-  const lockedSecs = splitSections(locked);
+  const setEx = (i: number, p: Partial<JudgeConfigLike['examples'][number]>) => up({ examples: value.examples.map((x, j) => (j === i ? { ...x, ...p } : x)) });
+  const rows = (s: string, min: number) => Math.max(min, s.split('\n').length + 1);
   return (
     <div className="ck-cols">
       <section className="rp-card ck-doc">
-        <div className="ck-doc-head"><b>标准提示词</b><small>相当于给 AI 的 agent.md：约束注意力、解析方法、产出内容和格式</small></div>
+        <div className="ck-doc-head"><b>标准提示词</b><small>相当于给 AI 的 agent.md：约束注意力、解析方法、产出内容和格式。用 ## 小标题分段</small></div>
         <div className="ck-doc-body">
-          {secs.map((s, i) => (
-            <div key={s.title + i} className="ck-sec">
-              <div className="ck-sec-head"><b>## {s.title}</b><Tag tone="blue">可改</Tag></div>
-              <textarea value={s.body} rows={Math.max(2, s.body.split('\n').length + 1)} onChange={(e) => setSec(i, e.target.value)} />
-            </div>
-          ))}
+          <div className="ck-sec">
+            <div className="ck-sec-head"><b>可改部分</b><Tag tone="blue">BSD 负责人维护</Tag></div>
+            <textarea className="ck-prompt" value={value.prompt} rows={rows(value.prompt, 14)} spellCheck={false} onChange={(e) => up({ prompt: e.target.value })} />
+          </div>
+          <div className="ck-sec">
+            <div className="ck-sec-head"><b>锁定部分：安全约束、适用方、输出格式</b><Tag tone="gray"><Lock size={10} /> {isAdmin ? '管理员可改 · 程序依赖' : '只有管理员能改'}</Tag></div>
+            {isAdmin
+              ? <><textarea className="ck-prompt is-locked" value={value.locked || ''} rows={rows(value.locked || '', 10)} spellCheck={false} onChange={(e) => up({ locked: e.target.value })} /><small className="rp-muted">输出格式里的 JSON 结构是程序解析结果用的，改字段名会导致解析失败；{'{{风险名词表}}'} 处会填入风险规则名。</small></>
+              : <pre className="ck-locked">{value.locked}</pre>}
+          </div>
           {!!value.policies.length && (
             <div className="ck-sec">
               <div className="ck-sec-head"><b>## 公司口径</b><Tag tone="purple">来自改进建议</Tag></div>
@@ -47,22 +44,22 @@ export function PromptPanel({ value, onChange, locked, model, policySource }: { 
             </div>
           )}
           <div className="ck-sec">
-            <div className="ck-sec-head"><b>## 通用判例 · {value.examples.length}</b><Tag tone="purple">出厂 + 人工改判</Tag></div>
+            <div className="ck-sec-head"><b>## 通用判例 · {value.examples.length}</b><Tag tone="purple">原文 + 标准答案，AI 照着判同类条款</Tag><span className="rp-grow" /><button className="rp-link" onClick={() => up({ examples: [{ id: newId('ex'), text: '', isRequirement: true, category: 'commercial', strength: 'required', enabled: true }, ...value.examples] })}><Plus size={12} /> 新增判例</button></div>
             {value.examples.map((e, i) => (
-              <div key={e.id} className={'ck-line' + (e.enabled ? '' : ' off')}>
-                <span className="ck-ex-text" title={e.note}>{e.text}</span>
-                <b className="ck-ex-res">→ {e.isRequirement ? `${CAT_LABEL[e.category as TenderCategory] || ''} · ${({ prohibited: '否决', mandatory: '强制', required: '一般要求', recommended: '建议' } as Record<string, string>)[e.strength || ''] || ''}` : '不是要求'}</b>
-                <span className="tp-switch"><input type="checkbox" checked={e.enabled} onChange={(ev) => up({ examples: value.examples.map((x, j) => (j === i ? { ...x, enabled: ev.target.checked } : x)) })} /><i /></span>
-                <button className="rp-icon" title="删除" onClick={() => up({ examples: value.examples.filter((_, j) => j !== i) })}><Trash2 size={13} /></button>
+              <div key={e.id} className={'ck-ex' + (e.enabled ? '' : ' off')}>
+                <textarea value={e.text} rows={2} placeholder="条款原文" onChange={(ev) => setEx(i, { text: ev.target.value })} />
+                <div className="ck-ex-foot">
+                  <select value={e.isRequirement ? (e.category || 'commercial') : 'no'} onChange={(ev) => ev.target.value === 'no' ? setEx(i, { isRequirement: false, category: undefined, strength: undefined }) : setEx(i, { isRequirement: true, category: ev.target.value as TenderCategory, strength: e.strength || 'required' })}>
+                    <option value="no">不是要求</option>{TENDER_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                  </select>
+                  {e.isRequirement && <select value={e.strength || ''} onChange={(ev) => setEx(i, { strength: (ev.target.value || undefined) as typeof e.strength })}><option value="">无强度</option>{STRENGTHS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
+                  <input value={e.note || ''} placeholder="说明（为什么这么判）" onChange={(ev) => setEx(i, { note: ev.target.value || undefined })} />
+                  <span className="tp-switch" title={e.enabled ? '启用' : '停用'}><input type="checkbox" checked={e.enabled} onChange={(ev) => setEx(i, { enabled: ev.target.checked })} /><i /></span>
+                  <button className="rp-icon" title="删除" onClick={() => up({ examples: value.examples.filter((_, j) => j !== i) })}><Trash2 size={13} /></button>
+                </div>
               </div>
             ))}
           </div>
-          {lockedSecs.map((s) => (
-            <div key={s.title} className="ck-sec is-locked">
-              <div className="ck-sec-head"><b>## {s.title.replace('（锁定）', '')}</b><Tag tone="gray"><Lock size={10} /> 锁定 · 程序依赖</Tag></div>
-              <pre>{s.body}</pre>
-            </div>
-          ))}
         </div>
       </section>
       <aside className="ck-side">
