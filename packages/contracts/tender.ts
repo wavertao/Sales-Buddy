@@ -95,7 +95,45 @@ export interface TenderOptions {
   /** 分类得分低于此值的条款不进分解表（强制项和风险项除外） */
   minCategoryScore: number;
 }
+/**
+ * 审查项：规则配置的主体，用业务语言写「要审什么、关注什么、什么情况下出什么结论」。
+ * AI 判断那半边注入提示词；程序校验那半边由 AI 抽数值、程序比阈值，结论冲突以程序为准。
+ */
+export type ItemLevel = 'prohibited' | 'high' | 'review';
+export interface ProgramCheck {
+  id: string;
+  /** 要 AI 抽出来的数值名，如「累计上限（占合同价 %）」 */
+  field: string; unit?: string;
+  /** missing = 找到了这一项但没抽到这个数值 */
+  op: '>' | '>=' | '<' | '<=' | 'missing';
+  value?: number;
+  result: ItemLevel;
+}
+export interface ReviewItem {
+  id: string; category: TenderCategory; name: string;
+  /** 要审什么，一句话 */
+  ask: string;
+  /** 关注点 / 口径，每条一句 */
+  focus: string[];
+  /** 结论档位：什么情况下出什么结论 */
+  levels: { level: ItemLevel; when: string }[];
+  checks: ProgramCheck[];
+  /** 检索词：AI 生成，保证相关条款一定送审；中英文都有 */
+  terms: string[];
+  owner?: TeamRole;
+  enabled: boolean;
+}
+/** 必查词：出现即必须送审，并至少标到指定档位 */
+export interface MustWord { id: string; word: string; level: 'prohibited' | 'mandatory' | 'risk'; category?: TenderCategory; source?: string; enabled: boolean }
+/** 标准与资质库：标书要求的标准号和我方证书比对 */
+export interface StandardEntry { id: string; code: string; status: 'have' | 'missing' | 'version'; expires?: string; note?: string }
+export interface Guards { mustWords: MustWord[]; standards: StandardEntry[] }
+
 export interface TenderRuleSet {
+  /** 审查清单（大类 → 审查项）；旧版规则没有，读取时补默认 */
+  items?: ReviewItem[];
+  /** 程序兜底：必查词、标准库；数据一致性用 fields 里打开「查矛盾」的字段 */
+  guards?: Guards;
   version: number; updatedAt: string; updatedBy: string;
   /** 这一版改了什么（采纳改进建议、回滚时写入；手工保存为空） */
   changeNote?: string;
@@ -144,6 +182,10 @@ export interface DecompItem {
   amended: boolean;
   /** 由条款正文算出的稳定编号，重传新版后仍能对上 */
   clauseKey?: string;
+  /** 归到哪个审查项（审查项 id） */
+  reviewItem?: string;
+  /** 程序校验和兜底的结果，和 AI 结论并排展示 */
+  checks?: { label: string; hit: boolean; level?: ItemLevel; detail: string }[];
   /** 结论来源：模型、规则，或测试用的确定性判断 */
   source?: JudgeSource;
   /** 模型给出的中文摘要、原文引用、理由、置信度（0–1） */
@@ -210,6 +252,8 @@ export interface TenderParseResult {
   schedules?: string[];
   /** 工作项分组；没有时按「类别 + 文件」分组 */
   workItems?: TenderWorkItem[];
+  /** 解析时用的审查项快照（名称、大类），审查结论按它汇总 */
+  reviewItems?: { id: string; name: string; category: TenderCategory; owner?: TeamRole }[];
   /** 内容和别的文件完全相同、只解析一次的文件数（多为压缩包里和包外的同一文件） */
   duplicateFiles?: number;
   /** 来自样本库时的样本编号，用来打开原文件；上传的原文件另存在数据目录 */

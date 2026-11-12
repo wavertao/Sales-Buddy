@@ -4,6 +4,7 @@ import { AppError } from '../../../../packages/contracts/index.ts';
 import type { User } from '../../../../packages/contracts/index.ts';
 import type { TenderRuleSet } from '../../../../packages/contracts/tender.ts';
 import { DEFAULT_RULES } from './default-rules.ts';
+import { DEFAULT_GUARDS, DEFAULT_ITEMS } from './default-checklist.ts';
 
 /** 规则存储：documents 表 tender_rules/active 存当前版本，tender_rules_history/v{n} 留每次保存的快照。 */
 const ACTIVE = 'active';
@@ -63,14 +64,32 @@ export const ruleSetSchema = z.object({
     concurrency: z.number().int().min(1).max(20),
     minConfidence: z.number().min(0).max(1),
   }),
+  items: z.array(z.object({
+    id, category, name: label, ask: z.string().max(600), focus: z.array(z.string().min(1).max(300)).max(20),
+    levels: z.array(z.object({ level: z.enum(['prohibited', 'high', 'review']), when: z.string().min(1).max(300) })).max(6),
+    checks: z.array(z.object({
+      id, field: z.string().min(1, '数值名称不能为空').max(60), unit: z.string().max(10).optional(),
+      op: z.enum(['>', '>=', '<', '<=', 'missing']), value: z.number().optional(), result: z.enum(['prohibited', 'high', 'review']),
+    }).superRefine((c, ctx) => { if (c.op !== 'missing' && typeof c.value !== 'number') ctx.addIssue({ code: 'custom', message: `校验「${c.field}」要填阈值` }); })).max(10),
+    terms: words, owner: role.optional(), enabled: z.boolean(),
+  })).max(200).optional(),
+  guards: z.object({
+    mustWords: z.array(z.object({ id, word: z.string().min(2, '必查词至少 2 个字').max(60), level: z.enum(['prohibited', 'mandatory', 'risk']), category: category.optional(), source: z.string().max(80).optional(), enabled: z.boolean() })).max(300),
+    standards: z.array(z.object({ id, code: z.string().min(2).max(40), status: z.enum(['have', 'missing', 'version']), expires: z.string().max(20).optional(), note: z.string().max(200).optional() })).max(300),
+  }).optional(),
 });
 
 function seedDefault(): TenderRuleSet {
-  return structuredClone({ ...DEFAULT_RULES, version: 1, updatedAt: now(), updatedBy: '系统默认' });
+  return structuredClone({ ...DEFAULT_RULES, items: DEFAULT_ITEMS, guards: DEFAULT_GUARDS, version: 1, updatedAt: now(), updatedBy: '系统默认' });
 }
 
-/** 接入模型判断之前保存的规则没有 judge，读取时补上默认值。 */
-const withJudge = (r: TenderRuleSet): TenderRuleSet => (r.judge ? r : { ...r, judge: structuredClone(DEFAULT_RULES.judge) });
+/** 早期保存的规则没有 judge / 审查清单 / 兜底规则，读取时补上默认值。 */
+const withJudge = (r: TenderRuleSet): TenderRuleSet => ({
+  ...r,
+  judge: r.judge || structuredClone(DEFAULT_RULES.judge),
+  items: r.items || structuredClone(DEFAULT_ITEMS),
+  guards: r.guards || structuredClone(DEFAULT_GUARDS),
+});
 
 export function getRules(): TenderRuleSet {
   const cur = get<TenderRuleSet>('tender_rules', ACTIVE);

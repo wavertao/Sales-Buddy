@@ -573,3 +573,37 @@ test('TENDER-20 关键词规则：只填词就能命中（含通配、英文词�
   bad.mandatory.push({ id: 'm-empty', label: '空规则', pattern: '', keywords: [], strength: 'mandatory', enabled: true });
   assert.throws(() => saveRules(admin, bad), /至少要填一个关键词/);
 });
+
+test('TENDER-21 审查清单三层：审查项注入提示词；AI 抽数值、程序比阈值并以程序为准；资质缺口；整项缺数值只标一次', async () => {
+  const { parsePackage } = await import('../apps/server/src/tender/pipeline.ts');
+  const { makeJudge, itemsSection } = await import('../apps/server/src/tender/judge.ts');
+  const { getRules } = await import('../apps/server/src/tender/rules.ts');
+  const rules = getRules();
+  assert.ok(rules.items!.some((i) => i.id === 'ri-ld') && rules.guards!.standards.length, '旧规则读取时补上出厂审查清单和兜底规则');
+  const text = ['第一章 合同条款', '1.1 The Contractor shall pay liquidated damages at 0.8% per week of delay, capped at 15% of the Contract Price.', '1.2 The BESS shall be certified to AS/NZS 5139 and UL 9540A before delivery.', '1.3 The Supplier shall provide the warranty for the battery system.', '1.4 投标人未按要求递交投标保证金的，其投标视为无效。'].join('\n');
+  let sys = '';
+  const judge = makeJudge(async (system, user) => {
+    sys += system;
+    const batch = JSON.parse(user) as { key: string; text: string }[];
+    return JSON.stringify({ results: batch.map((c) => c.text.includes('liquidated') ? { key: c.key, isRequirement: true, party: 'bidder', category: 'commercial', strength: 'required', reviewItem: 'ri-ld', values: [{ field: '累计上限（占合同价%）', value: 15, unit: '%' }, { field: '每周比例', value: 0.8, unit: '%' }], risks: [], summary: '违约金', quote: c.text.slice(0, 20), reason: '', confidence: 0.9 }
+      : c.text.includes('warranty') ? { key: c.key, isRequirement: true, party: 'bidder', category: 'commercial', strength: 'required', reviewItem: 'ri-warranty', values: [], risks: [], summary: '质保', quote: c.text.slice(0, 20), reason: '', confidence: 0.9 }
+      : { key: c.key, isRequirement: true, party: 'bidder', category: c.text.includes('AS/NZS') ? 'technical' : 'commercial', strength: 'required', risks: [], summary: 'x', quote: c.text.slice(0, 12), reason: '', confidence: 0.9 }) });
+  }, 'model', `fake-21-${Date.now()}`);
+  const r = await parsePackage(rules, '包', [txt('合同.txt', text)], 'upload', { judge });
+  assert.match(sys, /\[ri-ld\] 违约金/, '审查项注入提示词');
+  assert.match(sys, /输出格式（锁定）/);
+  const ld = r.items.find((i) => i.text.includes('liquidated'))!;
+  assert.equal(ld.reviewItem, 'ri-ld');
+  assert.ok(ld.risks.some((x) => x.severity === 'high' && x.label.includes('累计上限')), '15% > 10% → 程序判高风险，AI 判一般也要保留');
+  assert.ok(ld.needsReview && ld.reviewReasons!.some((x) => x.startsWith('程序校验')), '程序和 AI 冲突标待确认');
+  assert.ok(ld.checks!.some((c) => c.hit && c.detail.includes('每周比例')), '每周比例 0.8% > 0.5% → 待确认');
+  const cert = r.items.find((i) => i.text.includes('AS/NZS'))!;
+  assert.ok(cert.risks.some((x) => x.label === '资质缺口：AS/NZS 5139'), '标准库里我方没有的资质标缺口');
+  assert.ok(cert.checks!.some((c) => !c.hit && c.label === '资质：UL 9540A'), '我方已有的资质记为通过');
+  const bond = r.items.find((i) => i.text.includes('视为无效'))!;
+  assert.equal(bond.strength, 'prohibited', '必查词「视为无效」按否决保留');
+  assert.ok(r.reviewItems!.some((i) => i.id === 'ri-ld'), '结果里带审查项快照');
+  // 只注入相关审查项：一批全是技术类时不带商务审查项
+  const s2 = itemsSection([{ key: 'k', text: 'x', section: '', fileName: '', fileRole: 'itb', hint: { category: 'technical', risks: [] } }], rules.items!);
+  assert.ok(s2.includes('ri-cert') && !s2.includes('ri-ld'));
+});

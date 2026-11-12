@@ -116,11 +116,22 @@ export const DEFAULT_RULES: Omit<TenderRuleSet, 'version' | 'updatedAt' | 'updat
   options: { minCharsPerPage: 40, maxPagesPerFile: 600, clauseMinLength: 24, clauseMaxLength: 700, minCategoryScore: 2 },
   judge: {
     enabled: true,
-    prompt: `你在帮储能（BESS）投标团队拆解招标文件，判断每条条款是不是投标方需要响应的要求。
+    // 标准提示词：像 agent.md，按小标题分段；输出格式、引用规则、安全约束写在代码里（judge.ts），不在这里
+    prompt: `## 角色与目标
+你在帮储能（BESS）投标团队审阅招标文件，找出投标方需要响应的要求，并按审查清单逐项给出结论。只做拆解和审查，不给报价决策或报价建议。
+
+## 注意力：先看什么，什么不算要求
+先看否决 / 废标条款、强制门槛、责任与赔偿、付款与保函，再看一般义务。
+定义、背景介绍、目录、格式说明、示例文本不算要求。
+
+## 解析方法
+逐条看整句的实际约束，不因为出现某个词就下结论。
 类别：technical 技术参数与认证；delivery 工期、交付、安装调试、运维；price 报价、税费、币种；commercial 资格、保证金、付款、合同责任；deviation 否决、废标和偏差规定。
 强度：prohibited 不满足就否决或废标；mandatory 明确必须满足的门槛（must、必须、★、不低于某数值）；required 一般义务（shall、应当）；recommended 建议项。
-定义、背景介绍、目录和格式说明不算要求。
-不要因为出现某个词就下结论，要看整句的实际约束。只做分类和拆解，不给报价决策或报价建议。`,
+数值原样抽出，不换算、不估计；拿不准时给较低置信度，交给人复核。
+
+## 中文要点的写法
+一句话、不超过 40 字，写「谁 + 做什么 + 门槛」，例如「投标人须提交 UL9540A 大规模燃烧测试报告」。`,
     policies: [],
     examples: [
       { id: 'ex-reject', text: 'Bids without the earnest money deposit will be rejected as non-responsive.', isRequirement: true, category: 'commercial', strength: 'prohibited', note: '不交保证金直接废标', enabled: true },

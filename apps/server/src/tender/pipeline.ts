@@ -3,7 +3,8 @@ import type {
   DecompItem, ExcludedClause, FieldHit, FieldSummary, FileRole, JudgeSummary, OverrideLink, ParsedFile, RulePreviewClause, Severity, Strength,
   TenderCategory, TenderParseResult, TenderProgress, TenderRuleSet, TeamRole,
 } from '../../../../packages/contracts/tender.ts';
-import { TENDER_CATEGORIES, rulePattern } from '../../../../packages/contracts/tender.ts';
+import { TENDER_CATEGORIES, keywordsPattern, rulePattern } from '../../../../packages/contracts/tender.ts';
+import { missingChecks, programChecks } from './checks.ts';
 import { extOf, extractFile, HEADING_MARK, newDedupe, type Extracted, type SourceFile } from './extract.ts';
 import { clauseKey, type Candidate, type JudgeOutcome, type JudgeRunner } from './judge.ts';
 import { mergeVerdict, type Merged } from './merge.ts';
@@ -32,7 +33,14 @@ const keywordRe = (kw: string) => safe((/^[A-Za-z]/.test(kw) ? '\\b' : '') + kw,
 type Compiled = ReturnType<typeof compile>;
 export function compile(rules: TenderRuleSet) {
   const on = <T extends { enabled: boolean }>(xs: T[]) => xs.filter((x) => x.enabled);
+  // 必查词并进强制项 / 风险规则：命中即送审，并且走同一套否决、高风险护栏
+  const must = on(rules.guards?.mustWords || []);
+  const mustMandatory = must.filter((m) => m.level !== 'risk').map((m) => ({ id: m.id, label: `必查词：${m.word}`, pattern: '', keywords: [m.word], strength: m.level as 'prohibited' | 'mandatory', enabled: true }));
+  const mustRisks = must.filter((m) => m.level === 'risk').map((m) => ({ id: m.id, label: `必查词：${m.word}`, pattern: '', keywords: [m.word], severity: 'high' as const, category: m.category || ('commercial' as const), advice: '必查词命中，请人工核对', enabled: true }));
+  rules = { ...rules, mandatory: [...rules.mandatory, ...mustMandatory], risks: [...rules.risks, ...mustRisks] };
   return {
+    /** 审查项的检索词：命中就一定送审，并提示模型可能相关的审查项 */
+    items: on(rules.items || []).filter((i) => i.terms.length).map((i) => ({ item: i, re: safe(keywordsPattern(i.terms)) })).filter((i) => i.re) as { item: NonNullable<TenderRuleSet['items']>[number]; re: RegExp }[],
     rules,
     roles: on(rules.fileRoles).map((r) => ({
       rule: r,
@@ -404,15 +412,17 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
     const tag = { ...raw, category: raw.category || (hard ? ROLE_DEFAULT_CATEGORY[w.file.role] : undefined) };
     const strong = hard || tag.strength === 'required';
     const keep = tag.risks.length > 0 || hard || (strong && tag.score >= minCategoryScore) || (w.file.role === 'clarification' && tag.score >= minCategoryScore);
-    return { w, cl, tag, keep, clauseKey: clauseKey(cl.text), ruleRisks: tag.risks.map((r) => ({ label: r.label, severity: r.severity, advice: r.advice })) };
+    const itemHits = c.items.filter((x) => x.re.test(cl.text)).map((x) => x.item);
+    return { w, cl, tag, keep, itemHits, clauseKey: clauseKey(cl.text), ruleRisks: tag.risks.map((r) => ({ label: r.label, severity: r.severity, advice: r.advice })) };
   }));
   // 候选比规则的进表条件宽得多：有任何信号就交给模型，规则不再替人把条款删掉
-  const candidates: Candidate[] = opts.judge ? rows.filter((r) => r.tag.strength || r.tag.risks.length || r.tag.score > 0).map((r) => ({
+  const candidates: Candidate[] = opts.judge ? rows.filter((r) => r.tag.strength || r.tag.risks.length || r.tag.score > 0 || r.itemHits.length).map((r) => ({
     key: r.clauseKey, text: r.cl.text.slice(0, CLAUSE_TEXT_CAP), section: r.cl.section.title, fileName: r.w.file.name, fileRole: r.w.file.role,
-    hint: { category: r.tag.category, strength: r.tag.strength, risks: r.tag.risks.map((x) => x.label) },
+    hint: { category: r.tag.category || r.itemHits[0]?.category, strength: r.tag.strength, risks: r.tag.risks.map((x) => x.label), items: r.itemHits.length ? r.itemHits.map((i) => i.id) : undefined },
   })) : [];
   const riskLabels = rules.risks.filter((r) => r.enabled).map((r) => r.label);
-  const outcome: JudgeOutcome | undefined = opts.judge && candidates.length ? await opts.judge(candidates, rules.judge, progress, riskLabels) : undefined;
+  const reviewItems = (rules.items || []).filter((i) => i.enabled);
+  const outcome: JudgeOutcome | undefined = opts.judge && candidates.length ? await opts.judge(candidates, rules.judge, progress, riskLabels, reviewItems) : undefined;
   // 模型自拟的风险名去掉空格后和规则库重名的，统一成规则库的名称和处理建议
   const ruleRisk = new Map(rules.risks.map((r) => [r.label.replace(/\s+/g, ''), r]));
   const canonRisk = (x: { label: string; severity: Severity; advice: string }) => {
@@ -424,7 +434,9 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
   const seen = new Set<string>();
   const excluded: ExcludedClause[] = [];
   let items: DecompItem[] = [];
-  for (const { w, cl, tag, keep, clauseKey: key, ruleRisks } of rows) {
+  const valuesOf = new Map<DecompItem, NonNullable<NonNullable<JudgeOutcome['verdicts'] extends Map<string, infer V> ? V : never>['values']>>();
+  for (const { w, cl, tag, keep, itemHits, clauseKey: key, ruleRisks } of rows) {
+    const verdict = outcome?.verdicts.get(key);
     const m: Merged = outcome
       ? mergeVerdict({ keep, category: tag.category, strength: tag.strength, risks: ruleRisks }, outcome.verdicts.get(key), rules.judge.minConfidence, outcome.source)
       : { include: keep, category: tag.category, strength: tag.strength, risks: ruleRisks, source: 'rule', needsReview: false, reviewReasons: [] };
@@ -438,6 +450,12 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
     const dedupe = cl.text.slice(0, 140).toLowerCase().replace(/[^a-z0-9一-龥]/g, '');
     if (seen.has(dedupe)) continue;
     seen.add(dedupe);
+    // 程序校验与兜底：审查项的数值红线、标准与资质库；结论冲突以程序为准并标待确认
+    const reviewItem = reviewItems.find((i) => i.id === verdict?.reviewItem) || (!verdict ? itemHits[0] : undefined);
+    const pc = programChecks(cl.text, reviewItem, verdict?.values || [], rules.guards?.standards || []);
+    if (pc.strength && m.strength !== 'prohibited') { m.strength = pc.strength; }
+    for (const r of pc.risks) if (!m.risks.some((x) => x.label === r.label)) m.risks.push(r);
+    if (pc.reasons.length) { m.needsReview = true; m.reviewReasons = [...m.reviewReasons, ...pc.reasons]; }
     items.push({
       id: '', no: 0, category: m.category, title: titleOf(cl.text), text: cl.text.slice(0, CLAUSE_TEXT_CAP),
       strength: m.strength, risks: [...new Map(m.risks.map(canonRisk).map((x) => [x.label, x])).values()],
@@ -447,8 +465,19 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
       clauseKey: key, source: m.source, summary: m.summary, quote: m.quote, reason: m.reason, confidence: m.confidence,
       needsReview: m.needsReview || undefined, reviewReasons: m.reviewReasons.length ? m.reviewReasons : undefined,
       ruleCategory: tag.category, ruleStrength: tag.strength,
+      reviewItem: reviewItem?.id, checks: pc.checks.length ? pc.checks : undefined,
     });
+    if (verdict) valuesOf.set(items[items.length - 1], verdict.values || []);
   }
+  if (outcome) missingChecks(items.map((it) => ({
+    reviewItem: it.reviewItem, strength: it.strength, values: valuesOf.get(it),
+    mark: (r) => {
+      if (r.strength) it.strength = r.strength;
+      it.risks = [...it.risks, ...r.risks.filter((x) => !it.risks.some((y) => y.label === x.label))];
+      it.checks = [...(it.checks || []), ...r.checks];
+      it.needsReview = true; it.reviewReasons = [...(it.reviewReasons || []), ...r.reasons];
+    },
+  })), reviewItems);
   const truncated = items.length > MAX_ITEMS;
   if (truncated) {
     warnings.push(`识别出 ${items.length} 条要求，按风险等级与效力顺序保留前 ${MAX_ITEMS} 条`);
@@ -484,6 +513,7 @@ export async function parsePackage(rules: TenderRuleSet, packageName: string, fi
       risks, byCategory, conflicts: fields.filter((f) => f.status === 'conflict').length,
     },
     warnings, truncated, duplicateFiles: dedupe.skipped,
+    reviewItems: reviewItems.map((i) => ({ id: i.id, name: i.name, category: i.category, owner: i.owner })),
   };
 }
 

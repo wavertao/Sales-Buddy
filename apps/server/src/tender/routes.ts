@@ -9,6 +9,7 @@ import { getJob, getRun, listRuns, listSamples, parseSample, parseUpload } from 
 import { generateSuggestions, library, publish, reject, replay, suggestions, versions } from './evolve.ts';
 import { record } from '../db.ts';
 import { modelStatus } from '../model.ts';
+import { defaultModelCall, lockedInstructions } from './judge.ts';
 import type { TenderRuleSet } from '../../../../packages/contracts/tender.ts';
 
 /**
@@ -28,7 +29,22 @@ const editor = (res: express.Response) => {
 };
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 120 * 1024 * 1024, files: 60, fields: 4 } });
 
-r.get('/tender/rules', (_req, res) => res.json({ rules: getRules(), canEdit: ['admin', 'manager'].includes(user(res).role), model: modelStatus().configured ? modelStatus().model : null }));
+r.get('/tender/rules', (_req, res) => res.json({ rules: getRules(), canEdit: ['admin', 'manager'].includes(user(res).role), model: modelStatus().configured ? modelStatus().model : null, locked: lockedInstructions(['（风险名词表，来自风险规则）']) }));
+/**
+ * 审查项的检索词由 AI 生成：中英文同义说法、缩写、常见写法，保证相关条款一定送审。
+ * 没配模型时退回用名称和「要审什么」里的词。只发审查项的名称和说明，不发标书内容。
+ */
+r.post('/tender/rules/terms', async (req, res) => {
+  editor(res);
+  const b = z.object({ name: z.string().min(1).max(80), ask: z.string().max(600).default(''), category: z.string().max(20).default('') }).parse(req.body);
+  const fallback = [...new Set([b.name, ...b.name.split(/[\s/、，,（）()]+/)].map((s) => s.trim()).filter((s) => s.length >= 2))].slice(0, 8);
+  if (!modelStatus().configured) return res.json({ terms: fallback, source: 'fallback' });
+  try {
+    const raw = await defaultModelCall('你在帮储能投标团队整理招标文件审查项的检索词。给出这个审查项在中英文招标文件里常见的说法、同义词、缩写，10 到 16 个，每个不超过 6 个词，不要解释。只回 JSON：{"terms":["…"]}', JSON.stringify(b));
+    const got = z.object({ terms: z.array(z.string().min(2).max(60)).min(1).max(24) }).parse(JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/, '').trim()));
+    res.json({ terms: [...new Set(got.terms.map((t) => t.trim()))], source: 'model' });
+  } catch { res.json({ terms: fallback, source: 'fallback' }); }
+});
 r.put('/tender/rules', (req, res) => res.json(saveRules(editor(res), req.body)));
 r.post('/tender/rules/reset', (_req, res) => res.json(resetRules(editor(res))));
 r.get('/tender/rules/history', (_req, res) => res.json(ruleHistory()));
