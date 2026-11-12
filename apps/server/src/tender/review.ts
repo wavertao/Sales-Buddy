@@ -73,7 +73,7 @@ export function reviewClause(by: string, bidId: string, r: TenderParseResult, ru
   const f: TenderFeedback = {
     ...body, bidId, clauseKey: key, text: (it || ex)!.text, fileName: (it || ex)!.fileName, section: (it || ex)!.section,
     before: prior?.before || (it ? { isRequirement: true, category: it.category, strength: it.strength, source: it.source } : { isRequirement: false, category: ex!.ruleCategory, strength: ex!.ruleStrength }),
-    by, at: now(),
+    by, at: now(), ruleVersion: prior?.ruleVersion ?? r.ruleVersion, runId: prior?.runId ?? r.id,
   };
   put('tender_feedback', feedbackId(bidId, key), f);
   applyOne(r, excluded, rules, f);

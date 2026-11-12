@@ -6,11 +6,14 @@ import type { User } from '../../../../packages/contracts/index.ts';
 import { getRules, resetRules, restoreRules, ruleHistory, ruleSetSchema, saveRules } from './rules.ts';
 import { previewText } from './pipeline.ts';
 import { getJob, getRun, listRuns, listSamples, parseSample, parseUpload } from './service.ts';
+import { generateSuggestions, library, publish, reject, replay, suggestions, versions } from './evolve.ts';
+import { record } from '../db.ts';
 import type { TenderRuleSet } from '../../../../packages/contracts/tender.ts';
 
 /**
  * 标书解析接口（挂在 /api 下，沿用 index.ts 的 Bearer 鉴权）：
  *   规则：GET/PUT /tender/rules · POST /tender/rules/reset · GET /tender/rules/history · POST /tender/rules/restore · POST /tender/rules/preview
+ *   自进化：GET /tender/evolve/library · GET /tender/evolve/suggestions · POST …/suggestions/generate · POST …/suggestions/:id/replay|publish|reject · GET /tender/evolve/versions
  *   解析：GET /tender/samples · POST /tender/parse（样本）· POST /tender/upload（上传整包）· GET /tender/runs · GET /tender/runs/:id
  * 改规则只给 manager / admin（对应方案里的 BSD 维护口径，待 Q3 确认）；所有人都能解析和试跑。
  */
@@ -36,6 +39,15 @@ r.post('/tender/rules/preview', (req, res) => {
   res.json(previewText(rules, body.text));
 });
 
+// 自进化：看谁都能看，生成、回放、发布、驳回只给主管和管理员
+const bidName = (id: string) => { const b = record(id); return b ? String(b.name || b.number || id).replace(/^.*?·\s*/, '') : id; };
+r.get('/tender/evolve/library', (_req, res) => res.json(library(bidName)));
+r.get('/tender/evolve/suggestions', (_req, res) => res.json(suggestions()));
+r.post('/tender/evolve/suggestions/generate', async (_req, res) => res.json(await generateSuggestions(editor(res).name)));
+r.post('/tender/evolve/suggestions/:id/replay', async (req, res) => { editor(res); res.json(await replay(req.params.id)); });
+r.post('/tender/evolve/suggestions/:id/publish', (req, res) => res.json(publish(req.params.id, editor(res).name)));
+r.post('/tender/evolve/suggestions/:id/reject', (req, res) => res.json(reject(req.params.id, editor(res).name, z.object({ note: z.string().max(300).optional() }).parse(req.body || {}).note)));
+r.get('/tender/evolve/versions', (_req, res) => res.json(versions()));
 r.get('/tender/samples', (_req, res) => res.json(listSamples()));
 r.post('/tender/parse', async (req, res) => {
   const { sample } = z.object({ sample: z.string().min(1).max(400) }).parse(req.body);

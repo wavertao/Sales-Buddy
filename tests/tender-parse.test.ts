@@ -478,3 +478,74 @@ test('TENDER-18 BSD 审核：提交即锁定，退回要写意见并解锁，通
   assert.equal(S.aiStatus(admin, bid.id).pipeline, 'dispatched', '流水线进入已下发');
   assert.throws(() => S.reviewTenderClause(admin, bid.id, key, { isRequirement: true, category: 'technical' }), /上传新版/);
 });
+
+test('TENDER-19 自进化：改进库标冲突；建议分示例 / 口径 / 放宽否决；回放拦截退步；示例回放通过自动生效；口径人工发布出新版本', async () => {
+  const { seed } = await import('../apps/server/src/seed.ts');
+  const { seedP9 } = await import('../apps/server/src/p9/seed-p9.ts');
+  const C = await import('../apps/server/src/crm.ts');
+  const S = await import('../apps/server/src/p9/service.ts');
+  const E = await import('../apps/server/src/tender/evolve.ts');
+  const { getRules } = await import('../apps/server/src/tender/rules.ts');
+  const { clauseKey } = await import('../apps/server/src/tender/judge.ts');
+  const { list } = await import('../apps/server/src/db.ts');
+  seed(); seedP9();
+  const admin = C.user('U-ADMIN');
+  const bid = S.listBids(admin, {}).records[4];
+  // 用本用例独有的条款，避免和前面用例改判过的同一条款形成冲突
+  const own = RFP.split('\n').map((l) => (/^\s*\d+(\.\d+)+\s/.test(l) ? l.replace(/。?\s*$/, '（自进化用例）。') : l)).join('\n');
+  await S.parseTenderForBid(admin, bid.id, { upload: { name: '包', files: [txt('招标文件正文.txt', own)] } });
+  const items = S.tenderForBid(admin, bid.id).result!.items;
+  assert.ok(items.length >= 4);
+  const [a, b, c, d] = items;
+  // 三条改判：两条降为一般要求（够出口径），一条从否决降级（放宽否决）
+  const other = (s?: string) => (s === 'recommended' ? 'required' : 'recommended') as any;
+  S.reviewTenderClause(admin, bid.id, a.clauseKey!, { isRequirement: true, category: 'technical', strength: other(a.strength) });
+  S.reviewTenderClause(admin, bid.id, b.clauseKey!, { isRequirement: true, category: 'technical', strength: other(b.strength), note: '配合类' });
+  S.reviewTenderClause(admin, bid.id, c.clauseKey!, { isRequirement: true, category: c.category, strength: c.strength });
+  const fbKey = (k: string) => list<any>('tender_feedback').find((f) => f.bidId === bid.id && f.clauseKey === k);
+  // 造一条否决被降级的记录
+  const { put } = await import('../apps/server/src/db.ts');
+  const vf = fbKey(d.clauseKey!) || { bidId: bid.id, clauseKey: d.clauseKey, text: d.text, fileName: d.fileName, section: d.section, by: '演示管理员', at: new Date().toISOString() };
+  put('tender_feedback', `${bid.id}:${d.clauseKey}`, { ...vf, isRequirement: true, category: 'technical', strength: 'mandatory', before: { isRequirement: true, category: 'technical', strength: 'prohibited', source: 'model' }, ruleVersion: getRules().version });
+
+  // 前两条的机器原判固定成「强制」，人工改成一般要求（和条款本来的强度无关）
+  for (const x of [a, b]) { const f = fbKey(x.clauseKey!); put('tender_feedback', `${bid.id}:${x.clauseKey}`, { ...f, strength: 'required', before: { ...f.before, isRequirement: true, strength: 'mandatory' } }); }
+  const lib = E.library();
+  const row0 = lib.rows.find((r) => r.id === `${bid.id}:${a.clauseKey}`)!;
+  assert.match(row0.human, /^改判/);
+  assert.equal(lib.rows.find((r) => r.id === `${bid.id}:${c.clauseKey}`)!.human, '确认机器判断');
+  assert.equal(fbKey(a.clauseKey!).ruleVersion, getRules().version, '改判记下当时的规则版本');
+
+  const v0 = getRules().version;
+  const sugs = await E.generateSuggestions('演示管理员', async () => JSON.stringify({ suggestions: [{ title: '配合类按一般要求', policy: '配合、协助类义务按一般要求，不算强制', basis: [0, 1] }, { title: '单条不算', policy: '只有一条支撑的口径', basis: [0] }] }));
+  const kinds = sugs.map((s) => s.kind).sort();
+  assert.ok(kinds.includes('veto') && kinds.includes('policy'), '放宽否决单独成一条，口径由模型归纳');
+  assert.ok(!sugs.some((s) => s.change.policies?.includes('只有一条支撑的口径')), '少于两条改判支撑的口径不要');
+  await assert.rejects(() => E.generateSuggestions('演示管理员', null), /没有新的/);
+
+  // 假模型：有这条口径时照人工结论判，没有时全判强制
+  const human = new Map(list<any>('tender_feedback').map((f) => [clauseKey(f.text), f]));
+  const judge = async (cands: any[], cfg: any) => ({ source: 'model' as const, model: 'fake', batches: 1, failedBatches: 0, cached: 0,
+    verdicts: new Map(cands.map((c) => { const f = human.get(c.key); const good = cfg.policies.includes('配合、协助类义务按一般要求，不算强制');
+      return [c.key, { isRequirement: true, party: 'bidder', category: f?.category || 'technical', strength: good ? (f?.strength || 'required') : 'prohibited', risks: [], summary: '', quote: c.text.slice(0, 8), reason: '', confidence: 0.9 }]; })) });
+  const policy = sugs.find((s) => s.kind === 'policy')!;
+  await assert.rejects(async () => E.publish(policy.id, '演示管理员'), /先回放/);
+  const rp = await E.replay(policy.id, judge as any);
+  assert.equal(rp.replay!.passed, true);
+  assert.ok(rp.replay!.after.agreement > rp.replay!.before.agreement);
+  assert.equal(rp.status, 'draft', '口径回放通过后等人工发布');
+  const pub = E.publish(policy.id, '演示管理员');
+  assert.equal(pub.publishedVersion, v0 + 1);
+  assert.ok(getRules().judge.policies.includes('配合、协助类义务按一般要求，不算强制'));
+  // 退步的拦截：有新口径时反而全判强制
+  const veto = sugs.find((s) => s.kind === 'veto')!;
+  // 应用放宽否决的示例后，模型把否决和强制都放成了建议：否决召回下降，应被拦截
+  const goodNow = async (cands: any[], cfg: any) => { const o = await judge(cands, cfg); if (cfg.examples.length > getRules().judge.examples.length) for (const v of o.verdicts.values()) v.strength = 'recommended'; return o; };
+  const blocked = await E.replay(veto.id, goodNow as any);
+  assert.equal(blocked.status, 'blocked', '回放退步直接拦截');
+  assert.throws(() => E.publish(veto.id, '演示管理员'), /没通过/);
+  const hist = E.versions();
+  assert.equal(hist[0].version, v0 + 1);
+  assert.equal(hist[0].source, 'suggestion');
+  assert.match(hist[0].changeNote, /配合类按一般要求/);
+});

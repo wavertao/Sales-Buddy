@@ -79,6 +79,8 @@ export interface TenderOptions {
 }
 export interface TenderRuleSet {
   version: number; updatedAt: string; updatedBy: string;
+  /** 这一版改了什么（采纳改进建议、回滚时写入；手工保存为空） */
+  changeNote?: string;
   fileRoles: FileRoleRule[];
   headings: HeadingRule[];
   categories: CategoryRule[];
@@ -153,6 +155,8 @@ export interface TenderFeedback extends ClauseReview {
   bidId: string; clauseKey: string; text: string; fileName: string; section: string;
   before: { isRequirement: boolean; category?: TenderCategory; strength?: Strength; source?: JudgeSource };
   by: string; at: string;
+  /** 改判时那次解析用的规则版本和解析编号，按版本统计改判率用；早期记录没有 */
+  ruleVersion?: number; runId?: string;
 }
 export interface JudgeSummary {
   mode: JudgeSource; model?: string | null; candidates: number; batches: number; failedBatches: number;

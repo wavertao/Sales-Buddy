@@ -100,9 +100,19 @@ export function resetRules(user: User): TenderRuleSet {
   return next;
 }
 
+/** 程序发布一版（采纳改进建议、示例自动生效）：在当前版本上改，版本号加一，写明改了什么 */
+export function publishRules(by: string, note: string, mutate: (r: TenderRuleSet) => TenderRuleSet): TenderRuleSet {
+  const cur = getRules();
+  const next: TenderRuleSet = { ...mutate(structuredClone(cur)), version: cur.version + 1, updatedAt: now(), updatedBy: by, changeNote: note };
+  put('tender_rules', ACTIVE, next);
+  put('tender_rules_history', `v${next.version}`, next);
+  return next;
+}
+export const ruleSnapshot = (version: number) => get<TenderRuleSet>('tender_rules_history', `v${version}`);
+
 export function ruleHistory() {
   return list<TenderRuleSet>('tender_rules_history')
-    .map((r) => ({ version: r.version, updatedAt: r.updatedAt, updatedBy: r.updatedBy }))
+    .map((r) => ({ version: r.version, updatedAt: r.updatedAt, updatedBy: r.updatedBy, changeNote: r.changeNote || '', policies: r.judge?.policies.length ?? 0, examples: r.judge?.examples.filter((e) => e.enabled).length ?? 0 }))
     .sort((a, b) => b.version - a.version)
     .slice(0, 30);
 }
