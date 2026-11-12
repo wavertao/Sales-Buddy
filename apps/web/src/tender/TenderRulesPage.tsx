@@ -8,16 +8,21 @@ import { CAT_LABEL, ROLE_LABEL, SEV_LABEL, STRENGTH_LABEL } from "./TenderResult
 import "./tender.css";
 import "./rules-page.css";
 import { LibraryPanel, SuggestionsPanel, VersionsPanel } from "./EvolvePanels";
+import { ChecklistEditor, GuardsEditor, PromptPanel } from "./ChecklistPanels";
 
 type Api = (path: string, options?: Record<string, unknown>) => Promise<any>;
 
-/** 标书解析规则配置（独立页面）：投标「招标文件」Tab 解析时用的全部规则都在这里维护、试跑、回滚。 */
-type PageTab = 'judge' | 'rules' | 'suggestions' | 'library' | 'versions';
+/**
+ * 标书解析规则配置（独立页面）：三层配置——标准提示词 → 审查清单（大类 → 审查项）→ 兜底规则，
+ * 外加改进建议（含改进库）和历史版本。投标「标书拆解」解析时按这里生效的版本跑。
+ */
+type PageTab = 'prompt' | 'items' | 'guards' | 'suggestions' | 'versions';
 type Meta = { version: number; updatedAt: string; updatedBy: string; canEdit: boolean; model: string | null; pending: number; policySource: Record<string, string> };
 export function TenderRulesPage({ api }: { api: Api }) {
-  const [tab, setTab] = useState<PageTab>('judge');
-  const [group, setGroup] = useState<GroupKey>('judge');
-  const [tester, setTester] = useState(true);
+  const [tab, setTab] = useState<PageTab>('items');
+  const [group, setGroup] = useState<GroupKey>('mandatory');
+  const [tester, setTester] = useState(false);
+  const [lib, setLib] = useState(false);
   // 自进化发布或回滚后规则版本会变，规则配置要重新读
   const [meta, setMeta] = useState<Meta | null>(null);
   const [gen, setGen] = useState(0);
@@ -29,23 +34,26 @@ export function TenderRulesPage({ api }: { api: Api }) {
   });
   useEffect(() => { void loadMeta(); }, [gen]);
   const changed = () => setGen((n) => n + 1);
-  const pick = (k: PageTab) => { setTab(k); if (k === 'judge') setGroup('judge'); if (k === 'rules' && group === 'judge') setGroup('mandatory'); };
-  const pickGroup = (g: GroupKey) => { setGroup(g); setTab(g === 'judge' ? 'judge' : 'rules'); };
-  const tabs: [PageTab, string][] = [['judge', '模型判断'], ['rules', '规则'], ['suggestions', `改进建议${meta?.pending ? ` · ${meta.pending}` : ''}`], ['library', '改进库'], ['versions', '历史版本']];
+  const tabs: [PageTab, string][] = [['prompt', '标准提示词'], ['items', '审查清单'], ['guards', '兜底规则'], ['suggestions', `改进建议${meta?.pending ? ` · ${meta.pending}` : ''}`], ['versions', '历史版本']];
+  const configTab = tab === 'prompt' || tab === 'items' || tab === 'guards';
   return (
     <div className="rp-shell">
       <header className="rp-top">
         <SlidersHorizontal size={16} /><b>标书解析规则</b>
         {meta && <small>当前 v{meta.version} · {meta.updatedAt.slice(0, 10)} {meta.updatedBy.replace(/（.*$/, '')}发布 · 模型 {meta.model || '未配置（用规则结果）'}</small>}
         <span className="rp-grow" />
-        <button className="rp-btn" onClick={() => { pickGroup(group === 'judge' ? 'mandatory' : group); setTester(true); }}><FlaskConical size={13} />试跑</button>
+        <button className="rp-btn" onClick={() => { setTab('guards'); setTester(true); }}><FlaskConical size={13} />试跑</button>
         <button className="rp-btn" onClick={() => setTab('versions')}><History size={13} />历史版本</button>
       </header>
-      <nav className="rp-tabs">{tabs.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => pick(k)}>{l}</button>)}</nav>
+      <nav className="rp-tabs">{tabs.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</nav>
       <div className="rp-body">
-        {(tab === 'judge' || tab === 'rules') && <RuleConfig key={gen} api={api} group={group} setGroup={pickGroup} tester={tester && tab === 'rules'} setTester={setTester} model={meta?.model || null} policySource={meta?.policySource || {}} onSaved={() => void loadMeta()} />}
-        {tab === 'suggestions' && <SuggestionsPanel api={api} canEdit={!!meta?.canEdit} version={meta?.version || 0} onChanged={changed} />}
-        {tab === 'library' && <LibraryPanel api={api} canEdit={!!meta?.canEdit} onChanged={changed} />}
+        {configTab && <RuleConfig key={gen} api={api} mode={tab as 'prompt' | 'items' | 'guards'} group={group} setGroup={setGroup} tester={tester} setTester={setTester} model={meta?.model || null} policySource={meta?.policySource || {}} onSaved={() => void loadMeta()} />}
+        {tab === 'suggestions' && (
+          <div className="ck-stack">
+            <div className="rp-seg"><button className={lib ? '' : 'on'} onClick={() => setLib(false)}>改进建议</button><button className={lib ? 'on' : ''} onClick={() => setLib(true)}>改进库（人工改判）</button></div>
+            {lib ? <LibraryPanel api={api} canEdit={!!meta?.canEdit} onChanged={changed} /> : <SuggestionsPanel api={api} canEdit={!!meta?.canEdit} version={meta?.version || 0} onChanged={changed} />}
+          </div>
+        )}
         {tab === 'versions' && <VersionsPanel api={api} canEdit={!!meta?.canEdit} current={meta?.version || 0} onChanged={changed} />}
       </div>
     </div>
@@ -72,7 +80,8 @@ function regexError(src: string): string | null { try { new RegExp(src, 'iu'); r
 const newId = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 
 const ADVANCED = new Set<GroupKey>(['fileRoles', 'headings', 'fields', 'options']);
-function RuleConfig({ api, group, setGroup, tester, setTester, model, policySource, onSaved }: { api: Api; group: GroupKey; setGroup: (g: GroupKey) => void; tester: boolean; setTester: (v: boolean) => void; model: string | null; policySource: Record<string, string>; onSaved?: () => void }) {
+function RuleConfig({ api, mode, group, setGroup, tester, setTester, model, policySource, onSaved }: { api: Api; mode: 'prompt' | 'items' | 'guards'; group: GroupKey; setGroup: (g: GroupKey) => void; tester: boolean; setTester: (v: boolean) => void; model: string | null; policySource: Record<string, string>; onSaved?: () => void }) {
+  const [locked, setLocked] = useState('');
   const [saved, setSaved] = useState<TenderRuleSet | null>(null);
   const [draft, setDraft] = useState<TenderRuleSet | null>(null);
   const [canEdit, setCanEdit] = useState(false);
@@ -80,7 +89,7 @@ function RuleConfig({ api, group, setGroup, tester, setTester, model, policySour
   const [busy, setBusy] = useState(false);
   const [showAdv, setShowAdv] = useState(false);
 
-  const load = () => api('/tender/rules').then((j) => { setSaved(j.rules); setDraft(structuredClone(j.rules)); setCanEdit(j.canEdit); });
+  const load = () => api('/tender/rules').then((j) => { setSaved(j.rules); setDraft(structuredClone(j.rules)); setCanEdit(j.canEdit); setLocked(j.locked || ''); });
   useEffect(() => { load().catch((e) => setMsg({ tone: 'red', text: e.message })); }, []);
   const dirty = useMemo(() => !!saved && !!draft && JSON.stringify(saved) !== JSON.stringify(draft), [saved, draft]);
   const invalid = useMemo(() => {
@@ -111,8 +120,6 @@ function RuleConfig({ api, group, setGroup, tester, setTester, model, policySour
   const g = GROUPS.find((x) => x.key === group)!;
   const count = (k: GroupKey) => (k === 'options' ? 5 : k === 'judge' ? draft.judge.examples.length : (draft[k] as unknown[]).length);
 
-  void restore;
-  const isJudge = group === 'judge';
   const addWord = (kind: 'prohibited' | 'mandatory' | 'required' | 'risk', word: string) => {
     const w = word.replace(/\s+/g, ' ').trim();
     const id = `kw-${kind}`;
@@ -128,34 +135,25 @@ function RuleConfig({ api, group, setGroup, tester, setTester, model, policySour
     }
     flash('green', `已把「${w}」加进规则，点「保存为 v${saved.version + 1}」生效`);
   };
-  return (
-    <div className="rp-config">
-      <div className="rp-card rp-rulebar">
-        <b>规则 v{saved.version}</b>
-        <small>{isJudge ? `${saved.updatedBy} · ${saved.updatedAt.slice(0, 16).replace('T', ' ')}${saved.changeNote ? ` · ${saved.changeNote}` : ''}` : '配置了模型时，这些规则只负责找候选和给提示，并守住否决、高风险两条护栏'}</small>
-        {dirty && <span className="rp-tag is-orange">有未保存的修改</span>}
-        {invalid > 0 && <span className="rp-tag is-red">{invalid} 条正则无效</span>}
-        {!canEdit && <span className="rp-tag is-gray">只读：主管或管理员才能保存</span>}
-        <span className="rp-grow" />
-        {msg && <span className={'rp-msg is-' + msg.tone}>{msg.text}</span>}
-        {isJudge && <button className="rp-btn" disabled={!dirty || busy} onClick={() => setDraft(structuredClone(saved))}><X size={13} />放弃修改</button>}
-        {isJudge && <button className="rp-btn" disabled={!canEdit || busy} onClick={reset}><RotateCcw size={13} />恢复默认</button>}
-        <button className="rp-btn primary" disabled={!canEdit || !dirty || busy || invalid > 0} onClick={save}>{busy ? <Loader2 size={13} className="tp-spin" /> : <Save size={13} />}保存为 v{saved.version + 1}</button>
-      </div>
-      <div className={'rp-cols' + (tester && !isJudge ? ' has-tester' : '')}>
+  void restore;
+  const isJudge = mode === 'prompt';
+  const hints: Record<typeof mode, string> = { prompt: '标准提示词约束 AI 的注意力、解析方法和产出；输出格式和安全约束锁定。', items: '按大类管理审查项：AI 判断那半边注入提示词，程序校验那半边由程序比阈值。', guards: '有确定答案的事由程序兜底：必查词、标准与资质库、数据一致性。' };
+  const advanced = (
+    <details className="rp-card ck-adv">
+      <summary>高级：系统内部规则（文件角色、章节、分类词、强制词、风险词、字段、责任分工、参数）· 一般不用改</summary>
+      <div className={'rp-cols' + (tester ? ' has-tester' : '')}>
         <nav className="rp-card rp-groups">
-          {GROUPS.filter((x) => !ADVANCED.has(x.key) || showAdv || group === x.key).map((x) => (
+          {GROUPS.filter((x) => x.key !== 'judge').map((x) => (
             <button key={x.key} className={group === x.key ? 'on' : ''} onClick={() => setGroup(x.key)}>
               <span><b>{x.label}</b><small>{x.step}</small></span><i>{count(x.key)}</i>
             </button>
           ))}
-          <button className="rp-adv-toggle" onClick={() => setShowAdv(!showAdv)}>{showAdv ? '收起高级' : `高级 · ${ADVANCED.size} 组（章节、字段、文件角色、参数）`}</button>
+          {!tester && <button className="rp-adv-toggle" onClick={() => setTester(true)}>打开试跑</button>}
         </nav>
         <section className="rp-card rp-group">
-          {isJudge ? null : <div className="rp-group-head"><b>{g.label} · {count(group)} {group === 'options' ? '项' : '条'}</b></div>}
-          {isJudge ? null : <p className="rp-hint">{g.hint}</p>}
+          <div className="rp-group-head"><b>{g.label} · {count(group)} {group === 'options' ? '项' : '条'}</b></div>
+          <p className="rp-hint">{g.hint}</p>
           <fieldset disabled={!canEdit} className="tp-fieldset">
-            {group === 'judge' && <JudgeForm value={draft.judge} onChange={(v) => set('judge', v)} model={model} policySource={policySource} />}
             {group === 'fileRoles' && (
               <RuleList items={draft.fileRoles} onChange={(v) => set('fileRoles', v)} add={() => ({ id: newId('fr'), role: 'other' as FileRole, label: '新角色', namePatterns: [], contentKeywords: [], precedence: 30, extractClauses: true, enabled: true })}
                 render={(r, up) => (<>
@@ -240,8 +238,29 @@ function RuleConfig({ api, group, setGroup, tester, setTester, model, policySour
             )}
           </fieldset>
         </section>
-        {tester && !isJudge && <RuleTester api={api} draft={draft} dirty={dirty} onClose={() => setTester(false)} onAddWord={canEdit ? addWord : undefined} />}
+        {tester && <RuleTester api={api} draft={draft} dirty={dirty} onClose={() => setTester(false)} onAddWord={canEdit ? addWord : undefined} />}
       </div>
+    </details>
+  );
+  return (
+    <div className="rp-config">
+      <div className="rp-card rp-rulebar">
+        <b>规则 v{saved.version}</b>
+        <small>{hints[mode]}</small>
+        {dirty && <span className="rp-tag is-orange">有未保存的修改</span>}
+        {invalid > 0 && <span className="rp-tag is-red">{invalid} 条正则无效</span>}
+        {!canEdit && <span className="rp-tag is-gray">只读：主管或管理员才能保存</span>}
+        <span className="rp-grow" />
+        {msg && <span className={'rp-msg is-' + msg.tone}>{msg.text}</span>}
+        <button className="rp-btn" disabled={!dirty || busy} onClick={() => setDraft(structuredClone(saved))}><X size={13} />放弃修改</button>
+        {isJudge && <button className="rp-btn" disabled={!canEdit || busy} onClick={reset}><RotateCcw size={13} />恢复默认</button>}
+        <button className="rp-btn primary" disabled={!canEdit || !dirty || busy || invalid > 0} onClick={save}>{busy ? <Loader2 size={13} className="tp-spin" /> : <Save size={13} />}保存为 v{saved.version + 1}</button>
+      </div>
+      <fieldset disabled={!canEdit} className="tp-fieldset">
+        {mode === 'prompt' && <PromptPanel value={draft.judge} onChange={(v) => set('judge', v)} locked={locked} model={model} policySource={policySource} />}
+        {mode === 'items' && <ChecklistEditor api={api} items={draft.items || []} onChange={(v) => set('items', v)} examples={draft.judge.examples} canEdit={canEdit} />}
+      </fieldset>
+      {mode === 'guards' && <GuardsEditor value={draft.guards || { mustWords: [], standards: [] }} onChange={(v) => set('guards', v)} fields={draft.fields} onFields={(id, cc) => set('fields', draft.fields.map((x) => (x.id === id ? { ...x, checkConflict: cc } : x)))} advanced={advanced} />}
     </div>
   );
 }

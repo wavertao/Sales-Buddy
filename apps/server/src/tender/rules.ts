@@ -144,10 +144,11 @@ export function addKeyword(user: User, kind: KeywordKind, word: string): TenderR
   if (w.length < 2 || w.length > 60) throw new AppError('INVALID_ARGUMENT', '关键词请选 2 到 60 个字', 400);
   const id = `kw-${kind}`;
   return publishRules(user.name, `从原文加词：「${w}」（${KW_LABEL[kind].replace('从原文添加的', '')}）`, (r) => {
-    if (kind === 'risk') {
-      const cur = r.risks.find((x) => x.id === id) || { id, label: KW_LABEL.risk, pattern: '', keywords: [], severity: 'medium' as const, category: 'commercial' as const, advice: '从原文添加，请补充处理建议', enabled: true };
-      const next = { ...cur, enabled: true, keywords: [...new Set([...(cur.keywords || []), w])] };
-      return { ...r, risks: r.risks.some((x) => x.id === id) ? r.risks.map((x) => (x.id === id ? next : x)) : [...r.risks, next] };
+    // 否决 / 强制 / 风险词进「兜底规则 · 必查词」；一般要求词仍是系统内部的强制项规则
+    if (kind !== 'required') {
+      const g = r.guards || structuredClone(DEFAULT_GUARDS);
+      if (g.mustWords.some((m) => m.word === w && m.level === kind)) return r;
+      return { ...r, guards: { ...g, mustWords: [...g.mustWords, { id: `mw-${Date.now().toString(36)}`, word: w, level: kind, source: `从原文添加 · ${user.name}`, enabled: true }] } };
     }
     const cur = r.mandatory.find((x) => x.id === id) || { id, label: KW_LABEL[kind], pattern: '', keywords: [], strength: kind, enabled: true };
     const next = { ...cur, enabled: true, keywords: [...new Set([...(cur.keywords || []), w])] };

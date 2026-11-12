@@ -559,15 +559,14 @@ test('TENDER-20 关键词规则：只填词就能命中（含通配、英文词�
   const r1 = addKeyword(admin, 'prohibited', '  视同 放弃  ');
   assert.equal(r1.version, v0 + 1);
   assert.match(r1.changeNote || '', /视同 放弃/);
-  const rule = r1.mandatory.find((m) => m.id === 'kw-prohibited')!;
-  assert.deepEqual(rule.keywords, ['视同 放弃']);
+  assert.ok(r1.guards!.mustWords.some((m) => m.word === '视同 放弃' && m.level === 'prohibited'), '否决词进兜底规则的必查词');
   addKeyword(admin, 'risk', '保质期不少于*年');
   const r2 = addKeyword(admin, 'prohibited', '视同 放弃');
-  assert.deepEqual(r2.mandatory.find((m) => m.id === 'kw-prohibited')!.keywords, ['视同 放弃'], '同一个词不重复加');
+  assert.equal(r2.guards!.mustWords.filter((m) => m.word === '视同 放弃').length, 1, '同一个词不重复加');
   const pv = previewText(getRules(), '第一章 投标须知\n1.1 未按时递交保证金的，视同  放弃投标资格并没收。\n1.2 电池保质期不少于 10 年，由供应商承担。\n1.3 The supplier shall cancel nothing; cancellation is optional.');
   const hit = pv.clauses.find((c) => c.text.includes('视同'))!;
   assert.equal(hit.strength, 'prohibited', '中文关键词中间的空格匹配任意空白');
-  assert.ok(pv.clauses.find((c) => c.text.includes('保质期'))!.risks.includes('从原文添加的风险词'), '通配 * 匹配中间几个字');
+  assert.ok(pv.clauses.find((c) => c.text.includes('保质期'))!.risks.includes('必查词：保质期不少于*年'), '通配 * 匹配中间几个字');
   assert.throws(() => addKeyword(admin, 'risk', 'x'), /2 到 60/);
   const bad = structuredClone(getRules());
   bad.mandatory.push({ id: 'm-empty', label: '空规则', pattern: '', keywords: [], strength: 'mandatory', enabled: true });

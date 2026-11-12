@@ -33,6 +33,10 @@ function Dot({ label }: { label: string }) {
   return <span className="tb-dot"><i />{label}</span>;
 }
 
+/** 审查项名称：解析结果带审查项快照，Breakdown 渲染时注入 */
+let ITEM_NAMES = new Map<string, string>();
+const reviewItemName = (id: string) => ITEM_NAMES.get(id) || '';
+
 /** 从原文加词：主管 / 管理员在原文里选中一段，直接加成规则关键词（发布新规则版本，下次解析生效） */
 export type WordKind = 'prohibited' | 'mandatory' | 'required' | 'risk';
 export type AddWordFn = (kind: WordKind, word: string) => Promise<void>;
@@ -109,6 +113,14 @@ export function ClauseDetail({ it, workItems, current, onReview, onDone, layout 
   );
   const why = it.needsReview && it.reviewReasons?.length ? <div className="tb-why"><Dot label={it.reviewReasons.join('；')} /></div> : null;
   const reason = it.reason && <p className="tb-reason"><span>{it.source === 'human' ? '复核说明' : '模型理由'}</span>{it.reason}</p>;
+  // 审查项和程序校验：和 AI 结论并排，标明来源
+  const itemName = it.reviewItem ? reviewItemName(it.reviewItem) : '';
+  const checks = (itemName || it.checks?.length) ? (
+    <div className="tb-checks">
+      {itemName && <div><span className="tb-src-tag is-purple">审查项</span>{itemName}</div>}
+      {it.checks?.map((c, i) => <div key={i} className={c.hit ? 'is-hit' : ''}><span className="tb-src-tag is-green">程序</span>{c.detail}</div>)}
+    </div>
+  ) : null;
 
   if (layout === 'inline') {
     return (
@@ -118,7 +130,7 @@ export function ClauseDetail({ it, workItems, current, onReview, onDone, layout 
           <Source it={it} />
           {it.summary && <p className="tb-zh"><span>中文要点</span>{it.summary}</p>}
         </div>
-        <div className="tb-inline-judge">{why}{fields}{reason}{actions}</div>
+        <div className="tb-inline-judge">{why}{checks}{fields}{reason}{actions}</div>
       </div>
     );
   }
@@ -127,7 +139,7 @@ export function ClauseDetail({ it, workItems, current, onReview, onDone, layout 
       <div className="tb-panel-body">
         <section><h5>原文<span className="tb-meta">{it.fileName} · 第 {it.page} 页 · {it.section}</span></h5><Source it={it} /></section>
         {it.summary && <section><h5>中文要点</h5><p className="tb-zh-p">{it.summary}</p></section>}
-        <section><h5>判断<span className="tb-meta">{sourceLabel(it)}{it.confidence !== undefined ? ` · 置信度 ${it.confidence}` : ''}</span></h5>{why}{fields}{reason}</section>
+        <section><h5>判断<span className="tb-meta">{sourceLabel(it)}{it.confidence !== undefined ? ` · 置信度 ${it.confidence}` : ''}</span></h5>{why}{checks}{fields}{reason}</section>
       </div>
       {actions && <div className="tb-panel-foot">{actions}<span className="tb-hint">改了字段再确认即为改判，会记入改进库</span></div>}
     </>
@@ -135,6 +147,7 @@ export function ClauseDetail({ it, workItems, current, onReview, onDone, layout 
 }
 
 export function TenderBreakdown(props: { result: TenderParseResult; items: WorkItem[]; onReview?: ReviewFn; excludedCount: number; onAddWord?: AddWordFn }) {
+  ITEM_NAMES = new Map((props.result.reviewItems || []).map((i) => [i.id, i.name]));
   return <AddWord.Provider value={props.onAddWord}><Breakdown {...props} /></AddWord.Provider>;
 }
 function Breakdown({ result, items, onReview, excludedCount }: {

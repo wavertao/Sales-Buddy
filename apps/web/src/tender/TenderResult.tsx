@@ -159,6 +159,48 @@ export function Coverage({ r, onOpen }: { r: TenderParseResult; onOpen?: (fileId
   );
 }
 
+/**
+ * 审查结论：按审查清单逐项汇总这次解析的结果——找到几条、触碰红线几条、待确认几条、没找到的列出来。
+ * 人复核时先看这一张，再去分解表里看具体条款。
+ */
+export function ReviewSummary({ r }: { r: TenderParseResult }) {
+  const list = r.reviewItems || [];
+  if (!list.length) return null;
+  const rows = list.map((ri) => {
+    const mine = r.items.filter((i) => i.reviewItem === ri.id);
+    const red = mine.filter((i) => (i.checks || []).some((c) => c.hit) || i.strength === 'prohibited' || i.risks.some((x) => x.severity === 'high'));
+    const review = mine.filter((i) => i.needsReview);
+    return { ri, mine, red, review };
+  });
+  const found = rows.filter((x) => x.mine.length).length;
+  const tone = (x: typeof rows[number]) => (!x.mine.length ? ['没找到', 'gray'] : x.red.length ? ['触碰红线', 'red'] : x.review.length ? ['待确认', 'orange'] : ['已找到', 'green']);
+  return (
+    <div className="tp-card">
+      <div className="tp-card-head"><ListChecks size={14} /><b>审查结论</b><span className="tp-muted">按审查清单逐项：{list.length} 项里找到 {found} 项，{rows.filter((x) => x.red.length).length} 项触碰红线</span></div>
+      <table className="tp-table">
+        <thead><tr><th>大类</th><th>审查项</th><th>结论</th><th>条数</th><th>红线 / 待确认</th><th>要点</th></tr></thead>
+        <tbody>
+          {rows.sort((a, b) => TENDER_CATEGORIES.findIndex((c) => c.key === a.ri.category) - TENDER_CATEGORIES.findIndex((c) => c.key === b.ri.category)).map((x) => {
+            const [label, t] = tone(x);
+            const lead = x.red[0] || x.review[0] || x.mine[0];
+            const hit = lead?.checks?.find((c) => c.hit);
+            return (
+              <tr key={x.ri.id}>
+                <td className="tp-muted">{CAT_LABEL[x.ri.category]}</td>
+                <td><b>{x.ri.name}</b></td>
+                <td><span className={'tp-pill ' + t}>{label}</span></td>
+                <td className="tp-num">{x.mine.length || '–'}</td>
+                <td className="tp-num">{x.mine.length ? `${x.red.length} / ${x.review.length}` : '–'}</td>
+                <td className="tp-small">{hit ? <><span className="tp-pill green">程序</span> {hit.detail}</> : lead ? (lead.summary || lead.title) : <span className="tp-muted">标书里没有找到相关条款，请人工确认是否遗漏</span>}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function FilesCard({ r, onOpen }: { r: TenderParseResult; onOpen?: (fileId: string, name: string) => void }) {
   const files = [...r.files].sort((a, b) => b.precedence - a.precedence);
   return (

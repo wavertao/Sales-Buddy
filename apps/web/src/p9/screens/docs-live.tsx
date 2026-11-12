@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CircleCheck, Download, FileArchive, FileUp, FolderInput, FolderOpen, Globe, HardDrive, Info, Loader, Send, Upload } from 'lucide-react';
 import type { ExcludedClause, TenderJob, TenderParseResult, TenderProgress } from '../../../../../packages/contracts/tender';
-import { Coverage, ExcludedCard, FieldsCard, FilesCard, JudgeNote, Kpi, OverridesCard, fmtSize, type ReviewFn } from '../../tender/TenderResult';
+import { Coverage, ExcludedCard, FieldsCard, FilesCard, JudgeNote, ReviewSummary, Kpi, OverridesCard, fmtSize, type ReviewFn } from '../../tender/TenderResult';
 import { TenderBreakdown, type WorkItem } from '../../tender/TenderBreakdown';
 import { exportBreakdownXlsx } from '../../tender/export-xlsx';
 import { openTenderFile } from '../../tender/open-file';
@@ -226,6 +226,7 @@ export function LiveDocs() {
               <div className="p9-docs-warn"><JudgeNote r={r} /></div>
               {!!r.warnings.length && <div className="tp-alert orange p9-docs-warn"><div>{r.warnings.map(w => <div key={w}>{w}</div>)}</div></div>}
             </section>
+            <ReviewSummary r={r} />
             <FieldsCard fields={r.fields} />
             <FilesCard r={r} onOpen={openFile} />
             {!!r.overrides.length && <OverridesCard r={r} />}
