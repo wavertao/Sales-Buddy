@@ -172,6 +172,11 @@ export function LiveDocs() {
   const approveBsd = () => void bsdCall('review', { decision: 'approve' }, (b) => `已通过 BSD 审核，下发 ${b.bsd?.dispatched ?? 0} 个任务到计划和待办`);
   const rejectBsd = () => { if (!rejectNote?.trim()) { notify('请写明修改意见'); return; } void bsdCall('review', { decision: 'reject', notes: rejectNote.trim() }, () => '已退回，PM 收到修改待办').then(() => setRejectNote(null)); };
   const excludedCount = r.judge?.excluded ?? 0;
+  const addWord = async (kind: string, word: string) => {
+    const label = { prohibited: '否决词', mandatory: '强制词', required: '一般要求词', risk: '风险词' }[kind];
+    try { const r = await api('/tender/rules/keyword', { method: 'POST', body: { kind, word } }); notify(`已把「${word}」加为${label}，规则更新为 v${r.version}，下次解析生效`); }
+    catch (e) { notify('加词失败：' + (e as Error).message); }
+  };
   const openFile = (fileId: string, name: string) => { void openTenderFile(bid.id, fileId, name).catch((e: Error) => notify(e.message)); };
   return (
     <div className="p9-docs-live tb-page">
@@ -204,7 +209,7 @@ export function LiveDocs() {
         </div>
       )}
       <div className="tb-tabbody">
-        {sub === 'breakdown' && <TenderBreakdown result={r} items={data.items} onReview={onReview} excludedCount={excludedCount} />}
+        {sub === 'breakdown' && <TenderBreakdown result={r} items={data.items} onReview={onReview} excludedCount={excludedCount} onAddWord={data.canBsd ? addWord : undefined} />}
         {sub === 'overview' && (
           <div className="tb-overview">
             <section className="p9-card">

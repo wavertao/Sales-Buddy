@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, createContext, useContext } from 'react';
 import { Check, ChevronDown, ChevronRight, ChevronUp, Columns2, ExternalLink, List, ListFilter, Search, Users, X } from "lucide-react";
 import type { DecompItem, Strength, TenderCategory, TenderParseResult } from "../../../../packages/contracts/tender";
 import { TENDER_CATEGORIES } from "../../../../packages/contracts/tender";
@@ -33,16 +33,33 @@ function Dot({ label }: { label: string }) {
   return <span className="tb-dot"><i />{label}</span>;
 }
 
+/** 从原文加词：主管 / 管理员在原文里选中一段，直接加成规则关键词（发布新规则版本，下次解析生效） */
+export type WordKind = 'prohibited' | 'mandatory' | 'required' | 'risk';
+export type AddWordFn = (kind: WordKind, word: string) => Promise<void>;
+const AddWord = createContext<AddWordFn | undefined>(undefined);
+
 /** 原文：模型引用的依据句加左侧黄条，前后文淡显；对不上就整段显示 */
 function Source({ it }: { it: DecompItem }) {
+  const addWord = useContext(AddWord);
+  const [pick, setPick] = useState('');
+  useEffect(() => setPick(''), [it.id]);
+  const onUp = () => { if (!addWord) return; const s = (window.getSelection()?.toString() || '').replace(/\s+/g, ' ').trim(); setPick(s.length >= 2 && s.length <= 60 ? s : ''); };
+  const add = (k: WordKind) => { void addWord?.(k, pick); setPick(''); window.getSelection()?.removeAllRanges(); };
+  const bar = addWord && pick && (
+    <div className="tb-pick"><span>把「<b>{pick}</b>」加为</span>
+      <button type="button" className="is-red" onClick={() => add('prohibited')}>否决词</button><button type="button" onClick={() => add('mandatory')}>强制词</button>
+      <button type="button" onClick={() => add('required')}>一般要求词</button><button type="button" className="is-orange" onClick={() => add('risk')}>风险词</button>
+      <button type="button" className="tb-pick-x" onClick={() => setPick('')} aria-label="取消"><X size={12} /></button></div>
+  );
   const at = it.quote ? it.text.toLowerCase().indexOf(it.quote.toLowerCase()) : -1;
-  if (at < 0) return <div className="tb-src"><p className="is-quote">{it.text}</p></div>;
+  if (at < 0) return <div className="tb-src" onMouseUp={onUp}><p className="is-quote">{it.text}</p>{bar}</div>;
   const before = it.text.slice(0, at).trim(), hit = it.text.slice(at, at + it.quote!.length), after = it.text.slice(at + it.quote!.length).trim();
   return (
-    <div className="tb-src">
+    <div className="tb-src" onMouseUp={onUp}>
       {before && <p>{before}</p>}
       <p className="is-quote">{hit}</p>
       {after && <p>{after}</p>}
+      {bar}
     </div>
   );
 }
@@ -117,7 +134,10 @@ export function ClauseDetail({ it, workItems, current, onReview, onDone, layout 
   );
 }
 
-export function TenderBreakdown({ result, items, onReview, excludedCount }: {
+export function TenderBreakdown(props: { result: TenderParseResult; items: WorkItem[]; onReview?: ReviewFn; excludedCount: number; onAddWord?: AddWordFn }) {
+  return <AddWord.Provider value={props.onAddWord}><Breakdown {...props} /></AddWord.Provider>;
+}
+function Breakdown({ result, items, onReview, excludedCount }: {
   result: TenderParseResult; items: WorkItem[]; onReview?: ReviewFn; excludedCount: number;
 }) {
   const [mode, setMode] = useState<BreakdownMode>(() => (localStorage.getItem('tb-mode') === 'split' ? 'split' : 'list'));

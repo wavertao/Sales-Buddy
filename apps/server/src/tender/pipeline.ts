@@ -3,7 +3,7 @@ import type {
   DecompItem, ExcludedClause, FieldHit, FieldSummary, FileRole, JudgeSummary, OverrideLink, ParsedFile, RulePreviewClause, Severity, Strength,
   TenderCategory, TenderParseResult, TenderProgress, TenderRuleSet, TeamRole,
 } from '../../../../packages/contracts/tender.ts';
-import { TENDER_CATEGORIES } from '../../../../packages/contracts/tender.ts';
+import { TENDER_CATEGORIES, rulePattern } from '../../../../packages/contracts/tender.ts';
 import { extOf, extractFile, HEADING_MARK, newDedupe, type Extracted, type SourceFile } from './extract.ts';
 import { clauseKey, type Candidate, type JudgeOutcome, type JudgeRunner } from './judge.ts';
 import { mergeVerdict, type Merged } from './merge.ts';
@@ -41,9 +41,9 @@ export function compile(rules: TenderRuleSet) {
     })),
     headings: on(rules.headings).map((h) => ({ rule: h, re: safe(h.pattern) })).filter((h) => h.re) as { rule: TenderRuleSet['headings'][number]; re: RegExp }[],
     categories: on(rules.categories).map((c) => ({ rule: c, kws: c.keywords.map(keywordRe).filter(Boolean) as RegExp[] })),
-    mandatory: on(rules.mandatory).map((m) => ({ rule: m, re: safe(m.pattern) })).filter((m) => m.re) as { rule: TenderRuleSet['mandatory'][number]; re: RegExp }[],
+    mandatory: on(rules.mandatory).map((m) => ({ rule: m, re: rulePattern(m) ? safe(rulePattern(m)) : null })).filter((m) => m.re) as { rule: TenderRuleSet['mandatory'][number]; re: RegExp }[],
     fields: on(rules.fields).map((f) => ({ rule: f, re: safe(f.pattern, 'giu') })).filter((f) => f.re) as { rule: TenderRuleSet['fields'][number]; re: RegExp }[],
-    risks: on(rules.risks).map((r) => ({ rule: r, re: safe(r.pattern) })).filter((r) => r.re) as { rule: TenderRuleSet['risks'][number]; re: RegExp }[],
+    risks: on(rules.risks).map((r) => ({ rule: r, re: rulePattern(r) ? safe(rulePattern(r)) : null })).filter((r) => r.re) as { rule: TenderRuleSet['risks'][number]; re: RegExp }[],
     owners: new Map(rules.owners.map((o) => [o.category, o])),
   };
 }

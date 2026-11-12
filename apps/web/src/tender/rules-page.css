@@ -92,3 +92,15 @@
 .rp-shell .rp-num { flex-direction: row; white-space: nowrap; }
 .rp-shell .rp-num input { padding: 0 4px; margin: 0; }
 .rp-example textarea { resize: none; }
+
+/* 关键词规则与从原文加词 */
+.rp-gen { font-family: "JetBrains Mono", Consolas, monospace; font-size: 11px; color: var(--rp-sub); word-break: break-all; }
+.rp-adv { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.rp-adv-toggle { margin-top: 6px; border: 0; border-top: 1px dashed var(--rp-line); background: none; padding: 10px 10px 4px; color: var(--rp-sub); font: inherit; font-size: 11.5px; text-align: left; cursor: pointer; }
+.rp-adv-toggle:hover { color: var(--rp-blue); }
+.rp-pick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; background: var(--rp-blue-bg); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+.rp-pick b { color: var(--rp-blue); }
+.rp-chip.is-red { background: var(--rp-red-bg); color: var(--rp-red); } .rp-chip.is-dark { background: var(--rp-bg); color: var(--rp-ink); }
+.rp-chip.is-gray { background: #fff; color: var(--rp-sub); } .rp-chip.is-orange { background: var(--rp-orange-bg); color: var(--rp-orange); }
+.rp-chip { padding: 3px 8px; }
+.rp-tester-out { user-select: text; }

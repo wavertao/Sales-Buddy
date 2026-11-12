@@ -3,7 +3,7 @@ import {
   AlertTriangle, Check, ChevronDown, ChevronRight, FlaskConical, History, Loader2, Play, Plus, RotateCcw, Save, Settings2, SlidersHorizontal, Trash2, X,
 } from "lucide-react";
 import type { FileRole, JudgeConfig, RulePreviewClause, Severity, Strength, TenderCategory, TenderRuleSet } from "../../../../packages/contracts/tender";
-import { TENDER_CATEGORIES } from "../../../../packages/contracts/tender";
+import { TENDER_CATEGORIES, keywordsPattern } from "../../../../packages/contracts/tender";
 import { CAT_LABEL, ROLE_LABEL, SEV_LABEL, STRENGTH_LABEL } from "./TenderResult";
 import "./tender.css";
 import "./rules-page.css";
@@ -58,10 +58,10 @@ const GROUPS: { key: GroupKey; label: string; step: string; hint: string }[] = [
   { key: 'judge', label: '模型判断', step: '第 4 步', hint: '配置了模型时，规则只负责找候选和给提示，类别、强度、风险由模型判断，每条结论必须引用原文。规则判为否决或高风险的不会被模型单方面去掉，分歧会标「待确认」。这里的提示词、公司口径和示例和规则同一个版本，保存、回滚都在一起。' },
   { key: 'fileRoles', label: '文件角色识别', step: '第 2 步', hint: '文件名正则命中 +3 分、前两页关键词命中 +1 分，取最高分的角色。效力顺序决定同一字段多文件取值时以谁为准；「拆条款」关掉的角色只登记不拆。' },
   { key: 'headings', label: '章节标题', step: '第 3 步', hint: '一行文字（≤120 字）命中任一正则就当作章节标题，后面的条款都挂在这个章节下。修订文件里引用的条款号也靠这里切出来的章节编号来定位。' },
-  { key: 'categories', label: '拆标分类', step: '第 4 步', hint: '条款原文每命中一个关键词 +1（同一词最多计 3 次），所在章节标题命中再 +1，乘以权重后取得分最高的类别。英文关键词自动加左词界，支持 non-?compliance 这类正则简写。' },
-  { key: 'mandatory', label: '强制项判定', step: '第 4 步', hint: '条款命中多条时取最强的：禁止 / 否决 > 强制 > 建议。只有强制或禁止、且分类得分达到下限的条款才进分解表（带风险的条款无条件进）。' },
+  { key: 'categories', label: '拆标分类', step: '第 4 步', hint: '条款原文每命中一个关键词 +1（同一词最多计 3 次），所在章节标题命中再 +1，乘以权重后取得分最高的类别。英文关键词自动加词边界，直接填词或短语即可。' },
+  { key: 'mandatory', label: '强制项判定', step: '第 4 步', hint: '填词或短语就行，比如 will be rejected、废标、不低于 *天（* 匹配中间任意几个字）；英文不分大小写。命中多条时取最强的：否决 > 强制 > 一般要求 > 建议。也可以在右边试跑结果里选中原文直接加词。' },
   { key: 'fields', label: '关键字段', step: '第 5 步', hint: '正则的第 1 个捕获组是取值。数字类字段会统一单位（GWh 折成 MWh），日期统一成年-月-日。打开「查矛盾」后，多文件取值不一致会标「待核对」，修订 / 澄清文件给出的新值会标「已被修订」。' },
-  { key: 'risks', label: '风险提示', step: '第 4 步', hint: '命中即在分解表里挂风险标签和处理建议，并按风险等级排序优先保留。' },
+  { key: 'risks', label: '风险提示', step: '第 4 步', hint: '填词或短语，命中即在分解表里挂风险标签和处理建议，并按风险等级排序优先保留。' },
   { key: 'owners', label: '责任分工', step: '第 5 步', hint: '每一类要求默认的负责角色、复核角色，以及在投标截止日前多少天完成（倒排）。' },
   { key: 'options', label: '解析参数', step: '全局', hint: '扫描件判定、读取页数上限、条款长度与进表门槛。' },
 ];
@@ -71,12 +71,14 @@ const TEAM_ROLES = ['SLS', 'PM', 'SC', 'QA', 'AMD', 'BSD'];
 function regexError(src: string): string | null { try { new RegExp(src, 'iu'); return null; } catch (e) { return (e as Error).message; } }
 const newId = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 
+const ADVANCED = new Set<GroupKey>(['fileRoles', 'headings', 'fields', 'options']);
 function RuleConfig({ api, group, setGroup, tester, setTester, model, policySource, onSaved }: { api: Api; group: GroupKey; setGroup: (g: GroupKey) => void; tester: boolean; setTester: (v: boolean) => void; model: string | null; policySource: Record<string, string>; onSaved?: () => void }) {
   const [saved, setSaved] = useState<TenderRuleSet | null>(null);
   const [draft, setDraft] = useState<TenderRuleSet | null>(null);
   const [canEdit, setCanEdit] = useState(false);
   const [msg, setMsg] = useState<{ tone: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showAdv, setShowAdv] = useState(false);
 
   const load = () => api('/tender/rules').then((j) => { setSaved(j.rules); setDraft(structuredClone(j.rules)); setCanEdit(j.canEdit); });
   useEffect(() => { load().catch((e) => setMsg({ tone: 'red', text: e.message })); }, []);
@@ -111,6 +113,21 @@ function RuleConfig({ api, group, setGroup, tester, setTester, model, policySour
 
   void restore;
   const isJudge = group === 'judge';
+  const addWord = (kind: 'prohibited' | 'mandatory' | 'required' | 'risk', word: string) => {
+    const w = word.replace(/\s+/g, ' ').trim();
+    const id = `kw-${kind}`;
+    if (kind === 'risk') {
+      const cur = draft.risks.find((x) => x.id === id) || { id, label: '从原文添加的风险词', pattern: '', keywords: [] as string[], severity: 'medium' as Severity, category: 'commercial' as TenderCategory, advice: '从原文添加，请补充处理建议', enabled: true };
+      const next = { ...cur, enabled: true, keywords: [...new Set([...(cur.keywords || []), w])] };
+      set('risks', draft.risks.some((x) => x.id === id) ? draft.risks.map((x) => (x.id === id ? next : x)) : [...draft.risks, next]);
+    } else {
+      const label = { prohibited: '从原文添加的否决词', mandatory: '从原文添加的强制词', required: '从原文添加的一般要求词' }[kind];
+      const cur = draft.mandatory.find((x) => x.id === id) || { id, label, pattern: '', keywords: [] as string[], strength: kind as Strength, enabled: true };
+      const next = { ...cur, enabled: true, keywords: [...new Set([...(cur.keywords || []), w])] };
+      set('mandatory', draft.mandatory.some((x) => x.id === id) ? draft.mandatory.map((x) => (x.id === id ? next : x)) : [...draft.mandatory, next]);
+    }
+    flash('green', `已把「${w}」加进规则，点「保存为 v${saved.version + 1}」生效`);
+  };
   return (
     <div className="rp-config">
       <div className="rp-card rp-rulebar">
@@ -127,11 +144,12 @@ function RuleConfig({ api, group, setGroup, tester, setTester, model, policySour
       </div>
       <div className={'rp-cols' + (tester && !isJudge ? ' has-tester' : '')}>
         <nav className="rp-card rp-groups">
-          {GROUPS.map((x) => (
+          {GROUPS.filter((x) => !ADVANCED.has(x.key) || showAdv || group === x.key).map((x) => (
             <button key={x.key} className={group === x.key ? 'on' : ''} onClick={() => setGroup(x.key)}>
               <span><b>{x.label}</b><small>{x.step}</small></span><i>{count(x.key)}</i>
             </button>
           ))}
+          <button className="rp-adv-toggle" onClick={() => setShowAdv(!showAdv)}>{showAdv ? '收起高级' : `高级 · ${ADVANCED.size} 组（章节、字段、文件角色、参数）`}</button>
         </nav>
         <section className="rp-card rp-group">
           {isJudge ? null : <div className="rp-group-head"><b>{g.label} · {count(group)} {group === 'options' ? '项' : '条'}</b></div>}
@@ -166,11 +184,11 @@ function RuleConfig({ api, group, setGroup, tester, setTester, model, policySour
                 </>)} />
             )}
             {group === 'mandatory' && (
-              <RuleList items={draft.mandatory} onChange={(v) => set('mandatory', v)} add={() => ({ id: newId('m'), label: '新强制项规则', pattern: '', strength: 'mandatory' as Strength, enabled: true })}
+              <RuleList items={draft.mandatory} onChange={(v) => set('mandatory', v)} add={() => ({ id: newId('m'), label: '新强制项规则', pattern: '', keywords: [], strength: 'mandatory' as Strength, enabled: true })}
                 render={(r, up) => (<>
                   <Row label="名称"><input value={r.label} onChange={(e) => up({ label: e.target.value })} /></Row>
                   <Row label="强度"><select value={r.strength} onChange={(e) => up({ strength: e.target.value as Strength })}>{Object.entries(STRENGTH_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Row>
-                  <Row label="正则" wide><Regex value={r.pattern} onChange={(v) => up({ pattern: v })} /></Row>
+                  <Keywords value={r.keywords || []} onChange={(v) => up({ keywords: v })} pattern={r.pattern} onPattern={(v) => up({ pattern: v })} />
                 </>)} />
             )}
             {group === 'fields' && (
@@ -183,11 +201,11 @@ function RuleConfig({ api, group, setGroup, tester, setTester, model, policySour
                 </>)} />
             )}
             {group === 'risks' && (
-              <RuleList items={draft.risks} onChange={(v) => set('risks', v)} add={() => ({ id: newId('r'), label: '新风险', pattern: '', severity: 'medium' as Severity, category: 'commercial' as TenderCategory, advice: '', enabled: true })}
+              <RuleList items={draft.risks} onChange={(v) => set('risks', v)} add={() => ({ id: newId('r'), label: '新风险', pattern: '', keywords: [], severity: 'medium' as Severity, category: 'commercial' as TenderCategory, advice: '', enabled: true })}
                 render={(r, up) => (<>
                   <Row label="名称"><input value={r.label} onChange={(e) => up({ label: e.target.value })} /></Row>
                   <Row label="等级 / 类别"><select value={r.severity} onChange={(e) => up({ severity: e.target.value as Severity })}>{Object.entries(SEV_LABEL).map(([k, l]) => <option key={k} value={k}>{l}风险</option>)}</select><select value={r.category} onChange={(e) => up({ category: e.target.value as TenderCategory })}>{TENDER_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}</select></Row>
-                  <Row label="正则" wide><Regex value={r.pattern} onChange={(v) => up({ pattern: v })} /></Row>
+                  <Keywords value={r.keywords || []} onChange={(v) => up({ keywords: v })} pattern={r.pattern} onPattern={(v) => up({ pattern: v })} />
                   <Row label="处理建议" wide><input value={r.advice} onChange={(e) => up({ advice: e.target.value })} /></Row>
                 </>)} />
             )}
@@ -222,7 +240,7 @@ function RuleConfig({ api, group, setGroup, tester, setTester, model, policySour
             )}
           </fieldset>
         </section>
-        {tester && !isJudge && <RuleTester api={api} draft={draft} dirty={dirty} onClose={() => setTester(false)} />}
+        {tester && !isJudge && <RuleTester api={api} draft={draft} dirty={dirty} onClose={() => setTester(false)} onAddWord={canEdit ? addWord : undefined} />}
       </div>
     </div>
   );
@@ -294,7 +312,7 @@ const ruleTag = (r: Record<string, unknown>): [string, string] | null => {
   if (r.level) return [`${r.level} 级`, 'gray'];
   return null;
 };
-const ruleLine = (r: Record<string, unknown>) => String(r.pattern ?? [...((r.namePatterns as string[]) || []), ...((r.keywords as string[]) || []), ...((r.contentKeywords as string[]) || [])].join(' | '));
+const ruleLine = (r: Record<string, unknown>) => { const kws = [...((r.keywords as string[]) || []), ...((r.namePatterns as string[]) || []), ...((r.contentKeywords as string[]) || [])]; return kws.length ? kws.join(' | ') + (r.pattern ? '  + 高级正则' : '') : String(r.pattern ?? ''); };
 function RuleList<T extends { id: string; enabled: boolean }>({ items, onChange, add, render, addLabel = '新增规则' }: {
   items: T[]; onChange: (v: T[]) => void; add: () => T; render: (r: T, up: (p: Partial<T>) => void) => React.ReactNode; addLabel?: string;
 }) {
@@ -320,6 +338,17 @@ function RuleList<T extends { id: string; enabled: boolean }>({ items, onChange,
       <button className="rp-link rp-add" onClick={() => { const n = add(); onChange([...items, n]); setOpen(n.id); }}>+ {addLabel}</button>
     </div>
   );
+}
+
+/** 关键词编辑：日常只填词；自动生成的正则只读展示；手写正则收在「高级」里 */
+function Keywords({ value, onChange, pattern, onPattern }: { value: string[]; onChange: (v: string[]) => void; pattern: string; onPattern: (v: string) => void }) {
+  const [adv, setAdv] = useState(!!pattern && !value.length);
+  const gen = keywordsPattern(value);
+  return (<>
+    <Row label={`关键词 · ${value.length}`} wide><Tags values={value} onChange={onChange} /></Row>
+    {gen && <Row label="自动生成" wide><code className="rp-gen">{gen}</code></Row>}
+    <Row label="" wide>{adv ? <div className="rp-adv"><span className="rp-muted">高级：手写正则（和关键词任一命中即算）</span><Regex value={pattern} onChange={onPattern} /></div> : <button className="rp-link" onClick={() => setAdv(true)}>{pattern ? '查看高级正则' : '高级：手写正则'}</button>}</Row>
+  </>);
 }
 
 const Row = ({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) => (
@@ -362,8 +391,13 @@ Section 5 Commercial Terms
 第四章 投标须知
 投标截止时间：2026年11月20日 10:00，投标有效期 90 日历天。`;
 
-function RuleTester({ api, draft, dirty, onClose }: { api: Api; draft: TenderRuleSet; dirty: boolean; onClose: () => void }) {
+function RuleTester({ api, draft, dirty, onClose, onAddWord }: { api: Api; draft: TenderRuleSet; dirty: boolean; onClose: () => void; onAddWord?: (kind: 'prohibited' | 'mandatory' | 'required' | 'risk', word: string) => void }) {
   const [text, setText] = useState(SAMPLE_TEXT);
+  const [pick, setPick] = useState('');
+  // 在结果里选中一段原文 → 一键加成关键词，加完自动重跑
+  const onSelect = () => { const s = (window.getSelection()?.toString() || '').replace(/\s+/g, ' ').trim(); setPick(s.length >= 2 && s.length <= 60 ? s : ''); };
+  const add = (kind: 'prohibited' | 'mandatory' | 'required' | 'risk') => { onAddWord?.(kind, pick); setPick(''); window.getSelection()?.removeAllRanges(); };
+  useEffect(() => { if (res) void run(); }, [draft.mandatory, draft.risks]);
   const [res, setRes] = useState<{ clauses: RulePreviewClause[]; sections: string[] } | null>(null);
   const [err, setErr] = useState('');
   async function run() {
@@ -377,7 +411,10 @@ function RuleTester({ api, draft, dirty, onClose }: { api: Api; draft: TenderRul
       <textarea className="rp-tester-in" value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
       <div className="rp-tester-bar"><span className="rp-grow">{err && <span className="is-red">{err}</span>}</span><button className="rp-btn primary" onClick={run}><Play size={13} />运行</button></div>
       {res && <small className="rp-muted">识别到 {res.sections.length} 个章节、{res.clauses.length} 条条款</small>}
-      <div className="rp-tester-out">
+      {onAddWord && (pick
+        ? <div className="rp-pick"><span>已选中「<b>{pick}</b>」加为</span><button className="rp-chip is-red" onClick={() => add('prohibited')}>否决词</button><button className="rp-chip is-dark" onClick={() => add('mandatory')}>强制词</button><button className="rp-chip is-gray" onClick={() => add('required')}>一般要求词</button><button className="rp-chip is-orange" onClick={() => add('risk')}>风险词</button><button className="rp-icon" onClick={() => setPick('')}><X size={12} /></button></div>
+        : res && <small className="rp-muted">在下面的原文里选中一段文字，可以直接加成关键词</small>)}
+      <div className="rp-tester-out" onMouseUp={onSelect}>
         {!res && <p className="rp-hint">贴一段招标文件原文，点「运行」看每条条款被切成什么、命中了哪些规则。</p>}
         {res?.clauses.map((c, i) => (
           <div key={i} className="rp-pv">

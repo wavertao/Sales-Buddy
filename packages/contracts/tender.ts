@@ -38,7 +38,8 @@ export interface FileRoleRule {
 }
 export interface HeadingRule { id: string; label: string; pattern: string; level: number; enabled: boolean }
 export interface CategoryRule { id: string; category: TenderCategory; label: string; keywords: string[]; weight: number; enabled: boolean }
-export interface MandatoryRule { id: string; label: string; pattern: string; strength: Strength; enabled: boolean }
+/** 强制项 / 风险规则：日常只填关键词（keywords），正则（pattern）放在「高级」里；两者都填时任一命中即算命中 */
+export interface MandatoryRule { id: string; label: string; pattern: string; keywords?: string[]; strength: Strength; enabled: boolean }
 export interface FieldRule {
   id: string; key: string; label: string;
   /** 正则，第 1 个捕获组为值 */
@@ -49,7 +50,24 @@ export interface FieldRule {
   checkConflict: boolean;
   enabled: boolean;
 }
-export interface RiskRule { id: string; label: string; pattern: string; severity: Severity; category: TenderCategory; advice: string; enabled: boolean }
+export interface RiskRule { id: string; label: string; pattern: string; keywords?: string[]; severity: Severity; category: TenderCategory; advice: string; enabled: boolean }
+
+/**
+ * 关键词转正则，给不会写正则的人用：特殊符号一律转义；空格匹配任意空白；
+ * * 是通配，匹配最多 20 个字符（「不低于 *天」）；以英文字母开头 / 结尾的词加词边界（cell 不命中 cancellation）。
+ * 页面上展示自动生成的正则，解析时用同一个函数。
+ */
+export function keywordsPattern(words: string[]): string {
+  const one = (w: string) => {
+    // 通配两边的空格不强求（「不低于 *天」也命中「不低于5天」）
+    const body = w.trim().replace(/\s*\*\s*/g, '*').replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+').replace(/\*/g, '.{0,20}?');
+    return (/^[A-Za-z0-9]/.test(w.trim()) ? '\\b' : '') + body + (/[A-Za-z0-9]$/.test(w.trim()) ? '\\b' : '');
+  };
+  const parts = words.map((w) => w.trim()).filter(Boolean).map(one);
+  return parts.length ? `(?:${parts.join('|')})` : '';
+}
+/** 一条强制项 / 风险规则最终用来匹配的正则：关键词和高级正则合在一起 */
+export const rulePattern = (r: { pattern: string; keywords?: string[] }) => [r.pattern.trim(), keywordsPattern(r.keywords || [])].filter(Boolean).join('|');
 export interface OwnerRule { category: TenderCategory; role: TeamRole; reviewer: TeamRole; dueOffsetDays: number }
 /** 模型判断的标注示例：模型照着这些判断同类条款。 */
 export interface JudgeExample {

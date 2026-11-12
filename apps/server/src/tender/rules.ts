@@ -17,6 +17,15 @@ const regex = z.string().min(1, '正则不能为空').max(600).superRefine((s, c
   try { new RegExp(s, 'iu'); } catch (e) { ctx.addIssue({ code: 'custom', message: `正则无效：${s}（${(e as Error).message}）` }); }
 });
 
+/** 强制项和风险规则可以只填关键词，正则留空 */
+const optionalRegex = z.string().max(600).superRefine((s, ctx) => {
+  if (!s) return;
+  try { new RegExp(s, 'iu'); } catch (e) { ctx.addIssue({ code: 'custom', message: `正则无效：${s}（${(e as Error).message}）` }); }
+});
+const needsMatcher = (r: { label: string; pattern: string; keywords?: string[] }, ctx: z.RefinementCtx) => {
+  if (!r.pattern.trim() && !(r.keywords || []).some((k) => k.trim())) ctx.addIssue({ code: 'custom', message: `规则「${r.label}」至少要填一个关键词` });
+};
+
 export const ruleSetSchema = z.object({
   version: z.number().int().min(0),
   fileRoles: z.array(z.object({
@@ -26,14 +35,14 @@ export const ruleSetSchema = z.object({
   })),
   headings: z.array(z.object({ id, label, pattern: regex, level: z.number().int().min(1).max(4), enabled: z.boolean() })),
   categories: z.array(z.object({ id, label, category, keywords: words, weight: z.number().min(0).max(10), enabled: z.boolean() })),
-  mandatory: z.array(z.object({ id, label, pattern: regex, strength: z.enum(['prohibited', 'mandatory', 'required', 'recommended']), enabled: z.boolean() })),
+  mandatory: z.array(z.object({ id, label, pattern: optionalRegex, keywords: words.optional(), strength: z.enum(['prohibited', 'mandatory', 'required', 'recommended']), enabled: z.boolean() }).superRefine(needsMatcher)),
   fields: z.array(z.object({
     id, label, key: z.string().regex(/^[a-z][a-z0-9_]*$/, '字段 key 只能用小写字母、数字、下划线'), pattern: regex,
     normalize: z.enum(['number', 'date', 'text']), unit: z.string().max(20).optional(), checkConflict: z.boolean(), enabled: z.boolean(),
   }).superRefine((f, ctx) => {
     if (!/\((?!\?)/.test(f.pattern)) ctx.addIssue({ code: 'custom', message: `字段「${f.label}」的正则需要一个捕获组 (...) 作为取值` });
   })),
-  risks: z.array(z.object({ id, label, pattern: regex, severity: z.enum(['high', 'medium', 'low']), category, advice: z.string().max(300), enabled: z.boolean() })),
+  risks: z.array(z.object({ id, label, pattern: optionalRegex, keywords: words.optional(), severity: z.enum(['high', 'medium', 'low']), category, advice: z.string().max(300), enabled: z.boolean() }).superRefine(needsMatcher)),
   owners: z.array(z.object({ category, role, reviewer: role, dueOffsetDays: z.number().int().min(0).max(60) })),
   options: z.object({
     minCharsPerPage: z.number().int().min(0).max(2000),
@@ -107,6 +116,24 @@ export function publishRules(by: string, note: string, mutate: (r: TenderRuleSet
   put('tender_rules', ACTIVE, next);
   put('tender_rules_history', `v${next.version}`, next);
   return next;
+}
+/** 「从原文加词」：把选中的一段原文加进对应的关键词规则（没有就新建一条），直接发布成新版本 */
+export type KeywordKind = 'prohibited' | 'mandatory' | 'required' | 'risk';
+const KW_LABEL: Record<KeywordKind, string> = { prohibited: '从原文添加的否决词', mandatory: '从原文添加的强制词', required: '从原文添加的一般要求词', risk: '从原文添加的风险词' };
+export function addKeyword(user: User, kind: KeywordKind, word: string): TenderRuleSet {
+  const w = word.replace(/\s+/g, ' ').trim();
+  if (w.length < 2 || w.length > 60) throw new AppError('INVALID_ARGUMENT', '关键词请选 2 到 60 个字', 400);
+  const id = `kw-${kind}`;
+  return publishRules(user.name, `从原文加词：「${w}」（${KW_LABEL[kind].replace('从原文添加的', '')}）`, (r) => {
+    if (kind === 'risk') {
+      const cur = r.risks.find((x) => x.id === id) || { id, label: KW_LABEL.risk, pattern: '', keywords: [], severity: 'medium' as const, category: 'commercial' as const, advice: '从原文添加，请补充处理建议', enabled: true };
+      const next = { ...cur, enabled: true, keywords: [...new Set([...(cur.keywords || []), w])] };
+      return { ...r, risks: r.risks.some((x) => x.id === id) ? r.risks.map((x) => (x.id === id ? next : x)) : [...r.risks, next] };
+    }
+    const cur = r.mandatory.find((x) => x.id === id) || { id, label: KW_LABEL[kind], pattern: '', keywords: [], strength: kind, enabled: true };
+    const next = { ...cur, enabled: true, keywords: [...new Set([...(cur.keywords || []), w])] };
+    return { ...r, mandatory: r.mandatory.some((x) => x.id === id) ? r.mandatory.map((x) => (x.id === id ? next : x)) : [...r.mandatory, next] };
+  });
 }
 export const ruleSnapshot = (version: number) => get<TenderRuleSet>('tender_rules_history', `v${version}`);
 

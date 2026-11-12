@@ -549,3 +549,27 @@ test('TENDER-19 自进化：改进库标冲突；建议分示例 / 口径 / 放�
   assert.equal(hist[0].source, 'suggestion');
   assert.match(hist[0].changeNote, /配合类按一般要求/);
 });
+
+test('TENDER-20 关键词规则：只填词就能命中（含通配、英文词边界）；从原文加词生成新版本；没有词也没有正则的规则保存不了', async () => {
+  const { getRules, addKeyword, saveRules } = await import('../apps/server/src/tender/rules.ts');
+  const { previewText } = await import('../apps/server/src/tender/pipeline.ts');
+  const C = await import('../apps/server/src/crm.ts');
+  const admin = C.user('U-ADMIN');
+  const v0 = getRules().version;
+  const r1 = addKeyword(admin, 'prohibited', '  视同 放弃  ');
+  assert.equal(r1.version, v0 + 1);
+  assert.match(r1.changeNote || '', /视同 放弃/);
+  const rule = r1.mandatory.find((m) => m.id === 'kw-prohibited')!;
+  assert.deepEqual(rule.keywords, ['视同 放弃']);
+  addKeyword(admin, 'risk', '保质期不少于*年');
+  const r2 = addKeyword(admin, 'prohibited', '视同 放弃');
+  assert.deepEqual(r2.mandatory.find((m) => m.id === 'kw-prohibited')!.keywords, ['视同 放弃'], '同一个词不重复加');
+  const pv = previewText(getRules(), '第一章 投标须知\n1.1 未按时递交保证金的，视同  放弃投标资格并没收。\n1.2 电池保质期不少于 10 年，由供应商承担。\n1.3 The supplier shall cancel nothing; cancellation is optional.');
+  const hit = pv.clauses.find((c) => c.text.includes('视同'))!;
+  assert.equal(hit.strength, 'prohibited', '中文关键词中间的空格匹配任意空白');
+  assert.ok(pv.clauses.find((c) => c.text.includes('保质期'))!.risks.includes('从原文添加的风险词'), '通配 * 匹配中间几个字');
+  assert.throws(() => addKeyword(admin, 'risk', 'x'), /2 到 60/);
+  const bad = structuredClone(getRules());
+  bad.mandatory.push({ id: 'm-empty', label: '空规则', pattern: '', keywords: [], strength: 'mandatory', enabled: true });
+  assert.throws(() => saveRules(admin, bad), /至少要填一个关键词/);
+});

@@ -3,7 +3,7 @@ import multer from 'multer';
 import { z } from 'zod';
 import { AppError } from '../../../../packages/contracts/index.ts';
 import type { User } from '../../../../packages/contracts/index.ts';
-import { getRules, resetRules, restoreRules, ruleHistory, ruleSetSchema, saveRules } from './rules.ts';
+import { addKeyword, getRules, resetRules, restoreRules, ruleHistory, ruleSetSchema, saveRules } from './rules.ts';
 import { previewText } from './pipeline.ts';
 import { getJob, getRun, listRuns, listSamples, parseSample, parseUpload } from './service.ts';
 import { generateSuggestions, library, publish, reject, replay, suggestions, versions } from './evolve.ts';
@@ -33,6 +33,7 @@ r.put('/tender/rules', (req, res) => res.json(saveRules(editor(res), req.body)))
 r.post('/tender/rules/reset', (_req, res) => res.json(resetRules(editor(res))));
 r.get('/tender/rules/history', (_req, res) => res.json(ruleHistory()));
 r.post('/tender/rules/restore', (req, res) => res.json(restoreRules(editor(res), z.object({ version: z.number().int().min(1) }).parse(req.body).version)));
+r.post('/tender/rules/keyword', (req, res) => { const b = z.object({ kind: z.enum(['prohibited', 'mandatory', 'required', 'risk']), word: z.string().max(200) }).parse(req.body); res.json(addKeyword(editor(res), b.kind, b.word)); });
 r.post('/tender/rules/preview', (req, res) => {
   const body = z.object({ text: z.string().min(1, '请贴一段文字').max(120000), rules: z.unknown().optional() }).parse(req.body);
   // 试跑可用页面上尚未保存的草稿规则；不传就用当前生效规则
