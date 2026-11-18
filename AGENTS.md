@@ -11,3 +11,13 @@
 - Do not run scenario reset or overwrite existing user-created CRM records as part of ordinary development or deployment.
 
 Initial import exception: the first baseline commit may initialize an empty `main`, followed by creation of `develop` at the same revision.
+
+## Pushing from this machine (Windows + proxy + DSH sandbox)
+
+- Direct access to github.com is reset (`Recv failure: Connection was reset`). The machine uses a system proxy at `127.0.0.1:7897` (Clash-style), but **git does not read the Windows system proxy** — set it explicitly:
+  ```powershell
+  $env:HTTP_PROXY="http://127.0.0.1:7897"; $env:HTTPS_PROXY="http://127.0.0.1:7897"
+  ```
+- Inside the restricted DSH sandbox git cannot reach Windows credentials (`schannel: AcquireCredentialsHandle failed: SEC_E_NO_CREDENTIALS`). Run `push` / `fetch` / `ls-remote` **outside the sandbox** (`danger-full-access`); credentials come from Git Credential Manager, no re-login needed.
+- Self-check: `git -C . ls-remote --heads origin`. After pushing: `git fetch origin`, `git status -sb` shows no `ahead`, and `git log --oneline origin/<branch>..HEAD` is empty.
+- Remote: `https://github.com/wavertao/Sales-Buddy.git`. Details and the same commands also live in the workspace-level `D:\AICRM\AGENTS.md`.
