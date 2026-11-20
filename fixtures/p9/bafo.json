@@ -1,0 +1,63 @@
+{
+  "bidId": "BID-20261010-003",
+  "rounds": [
+    {
+      "round": "R1",
+      "label": "首轮",
+      "date": "10-12",
+      "status": "已提交",
+      "warranty": "质保5年版",
+      "payment": "3-4-3",
+      "spares": "不含备件",
+      "scope": "基础版本，备件不含"
+    },
+    {
+      "round": "R2",
+      "label": "短名单",
+      "date": "10-25",
+      "status": "待确认",
+      "warranty": "质保10年版（可选项单独报价）",
+      "payment": "3-3-4",
+      "spares": "含2年备件",
+      "scope": "质保范围扩大；付款节点3-4-3改为3-3-4；备件含2年"
+    },
+    {
+      "round": "R3",
+      "label": "BAFO",
+      "date": "预计11-02",
+      "status": "待提交",
+      "warranty": null,
+      "payment": null,
+      "spares": null,
+      "scope": "待招标方澄清"
+    }
+  ],
+  "fieldDiffsR1ToR2": [
+    {
+      "field": "质保年限",
+      "old": "5年",
+      "new": "10年（可选项单独报价）",
+      "status": "已确认"
+    },
+    {
+      "field": "付款节点",
+      "old": "3-4-3",
+      "new": "3-3-4",
+      "status": "待确认"
+    },
+    {
+      "field": "备件范围",
+      "old": "不含备件",
+      "new": "含2年备件",
+      "status": "已确认"
+    },
+    {
+      "field": "质保范围",
+      "old": "整机质保",
+      "new": "整机+延保服务",
+      "status": "已确认"
+    }
+  ],
+  "diffNote": "字段级差异4处（原型版本表脚注称3处属原型内冲突，以字段级4处为准）；BAFO只做旧值→新值差异，不含金额、不做价格优劣判断。",
+  "finalVersionNote": "最终版=最新技术方案v3+报价单v3（严格权限）"
+}

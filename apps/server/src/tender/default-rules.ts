@@ -1,0 +1,149 @@
+import type { TenderRuleSet } from '../../../../packages/contracts/tender.ts';
+import { DEFAULT_LOCKED } from './judge.ts';
+
+/**
+ * 出厂规则：按储能（BESS）招标中英文样本整理（SECI DC/AC 包、Entergy、CEB、衢州 EPC、江苏光储充等）。
+ * 「规则配置」页保存的是它的副本；恢复默认即回到这里。
+ */
+export const DEFAULT_RULES: Omit<TenderRuleSet, 'version' | 'updatedAt' | 'updatedBy'> = {
+  fileRoles: [
+    { id: 'fr-clar', role: 'clarification', label: '澄清 / 答疑', precedence: 90, extractClauses: true, enabled: true,
+      namePatterns: ['clarification', '澄清', '答疑', 'pre-?bid', 'query'],
+      contentKeywords: ['clarification', 'query', 'response', '澄清', '答疑', '问题回复'] },
+    { id: 'fr-amd', role: 'amendment', label: '修订 / 补遗', precedence: 80, extractClauses: true, enabled: true,
+      namePatterns: ['amendment', 'addendum', 'corrigendum', '修订', '补遗', '变更公告', '更正'],
+      contentKeywords: ['amendment', 'addendum', 'corrigendum', 'stands modified', 'shall be read as', '修改为', '变更为'] },
+    { id: 'fr-itb', role: 'itb', label: '招标文件正文 / RFP', precedence: 50, extractClauses: true, enabled: true,
+      namePatterns: ['rfp', 'rft', 'itb', 'tender', 'main-?body', 'volume', '招标文件', '正文', '投标人须知'],
+      contentKeywords: ['instructions to bidders', 'request for proposal', 'bid security', '投标人须知', '评标办法', '投标文件格式'] },
+    { id: 'fr-spec', role: 'technical_spec', label: '技术规范 / 发包人要求', precedence: 60, extractClauses: true, enabled: true,
+      namePatterns: ['spec', 'scope', 'annexure', 'appendix-b', 'requirements', 'division.of.responsibility', '(?<![a-z])dor(?![a-z])', '技术规范', '技术要求', '技术协议', '发包人要求', '规范书'],
+      contentKeywords: ['technical specification', 'scope of work', 'state of charge', 'round trip efficiency', '技术规范', '技术要求', '电池舱', 'PCS'] },
+    { id: 'fr-contract', role: 'contract', label: '合同 / 协议', precedence: 55, extractClauses: true, enabled: true,
+      namePatterns: ['agreement', 'contract', '(?<![a-z])sla(?![a-z])', '(?<![a-z])o&m(?![a-z])', 'ltsa', 'term.?sheet', '合同', '协议'],
+      contentKeywords: ['liquidated damages', 'limitation of liability', 'indemnif', 'governing law', '违约责任', '合同条款'] },
+    { id: 'fr-notice', role: 'notice', label: '招标公告', precedence: 40, extractClauses: true, enabled: true,
+      namePatterns: ['notice', '公告', '(?<![a-z])nit(?![a-z])'],
+      contentKeywords: ['notice inviting', 'invitation for bids', '招标公告', '投标截止时间'] },
+    { id: 'fr-boq', role: 'boq', label: '报价清单 / 工程量清单', precedence: 45, extractClauses: false, enabled: true,
+      namePatterns: ['(?<![a-z])sor(?![a-z])', 'schedule.of.rates', 'boq', 'price', 'cost', '清单', '报价'],
+      contentKeywords: ['schedule of rates', 'unit price', 'total price', '单价', '合价', '工程量'] },
+    { id: 'fr-draw', role: 'drawing', label: '图纸 / 布置图', precedence: 20, extractClauses: false, enabled: true,
+      namePatterns: ['layout', 'drawing', '(?<![a-z])sld(?![a-z])', '(?<![a-z])dwg(?![a-z])', '(?<![a-z])ga(?![a-z])', 'schematic', '图纸', '布置图'],
+      contentKeywords: ['single line diagram', 'drawing no', '图号'] },
+    { id: 'fr-form', role: 'form', label: '格式 / 表单', precedence: 30, extractClauses: false, enabled: true,
+      namePatterns: ['(?<![a-z])format(?![a-z])', '(?<![a-z])forms?(?![a-z])', 'template', 'registration', 'certification', '格式', '封面', '模板'],
+      contentKeywords: ['format for', 'to be submitted on', '格式'] },
+    // 应答表要投标人逐项填写、附资料，本身就是要交付的清单，所以要拆条款
+    { id: 'fr-returnable', role: 'form', label: '应答表 / 回传资料', precedence: 50, extractClauses: true, enabled: true,
+      namePatterns: ['returnable', 'response.?schedule', '应答', '响应表', '偏差表'],
+      contentKeywords: ['returnable schedule', 'respondent to complete', 'tender checklist', '投标人填写'] },
+    { id: 'fr-integrity', role: 'integrity', label: '廉洁协议', precedence: 10, extractClauses: false, enabled: true,
+      namePatterns: ['integrity', '廉洁'], contentKeywords: ['integrity pact', '廉洁'] },
+    { id: 'fr-result', role: 'result', label: '中标结果', precedence: 5, extractClauses: false, enabled: true,
+      namePatterns: ['result', 'award', '中标结果', '中标公示'], contentKeywords: ['successful bidder', 'L1', '中标候选人'] },
+    { id: 'fr-ref', role: 'reference', label: '参考资料（可研 / 设计 / 地勘）', precedence: 15, extractClauses: false, enabled: true,
+      namePatterns: ['可研', '初步设计', '地勘', 'feasibility', 'geotech', 'glossary', 'due-?diligence'],
+      contentKeywords: ['可行性研究', '岩土工程勘察', 'feasibility report'] },
+  ],
+  headings: [
+    { id: 'h-cn-chapter', label: '第X章 / 第X卷', pattern: '^\\s*第[一二三四五六七八九十百零〇\\d]+[章卷篇部分]\\s*\\S', level: 1, enabled: true },
+    { id: 'h-cn-section', label: '第X节 / 第X条', pattern: '^\\s*第[一二三四五六七八九十百零〇\\d]+[节条]\\s*\\S', level: 2, enabled: true },
+    { id: 'h-cn-list', label: '一、二、三、', pattern: '^\\s*[一二三四五六七八九十]{1,3}[、．.]\\s*\\S{2,}', level: 2, enabled: true },
+    { id: 'h-en-section', label: 'Section / Chapter / Article / Annexure', pattern: '^\\s*(section|chapter|article|annexure|appendix|schedule|part)\\s+[A-Z0-9IVX]+[\\s.:–-]', level: 1, enabled: true },
+    { id: 'h-num', label: '1.2 / 1.2.3 编号标题', pattern: '^\\s*\\d{1,2}(\\.\\d{1,2}){1,3}\\.?\\s+[A-Za-z\\u4e00-\\u9fa5]', level: 3, enabled: true },
+    { id: 'h-num1', label: '1. 一级编号标题（短行）', pattern: '^\\s*\\d{1,2}\\.\\s+[A-Z\\u4e00-\\u9fa5][^。.;；]{2,60}$', level: 2, enabled: true },
+  ],
+  categories: [
+    { id: 'c-tech', category: 'technical', label: '技术', weight: 1, enabled: true, keywords: [
+      '电池', '电芯', '储能系统', 'PCS', 'BMS', 'EMS', '变流器', '循环', '充放电', '效率', 'SOC', 'SOH', '温控', '液冷', '消防', '并网', '电网', '谐波', '容量', '衰减', '认证', 'UL9540', 'IEC 62619', 'GB/T 36276', '技术规格', '参数',
+      'battery', 'cell', 'inverter', 'power conversion', 'round trip', 'efficiency', 'degradation', 'state of charge', 'cycle', 'augmentation', 'fire', 'HVAC', 'SCADA', 'grid code', 'harmonic', 'reactive power', 'availability', 'performance', 'datasheet', 'type test', 'specification'] },
+    { id: 'c-deliv', category: 'delivery', label: '交付', weight: 1, enabled: true, keywords: [
+      '交货', '交付', '工期', '供货期', '到货', '运输', '安装', '调试', '验收', '投运', '进度', '里程碑', '培训', '运维', '质保期', '备品备件', '现场',
+      'delivery', 'schedule', 'commissioning', 'COD', 'installation', 'transport', 'shipment', 'milestone', 'completion', 'acceptance test', 'FAT', 'SAT', 'O&M', 'spare', 'training', 'site'] },
+    { id: 'c-price', category: 'price', label: '价格', weight: 1.2, enabled: true, keywords: [
+      '报价', '价格', '单价', '总价', '含税', '税率', '币种', '汇率', '最高限价', '控制价', '投标报价', '价格调整', '费用',
+      'price', 'pricing', 'rate', 'quote', 'tariff', 'currency', 'exchange rate', 'GST', 'tax', 'escalation', 'schedule of rates', 'cost component', 'ceiling'] },
+    { id: 'c-comm', category: 'commercial', label: '商务', weight: 1, enabled: true, keywords: [
+      '资格', '资质', '业绩', '保证金', '保函', '付款', '预付款', '结算', '违约', '赔偿', '保险', '合同', '知识产权', '保密', '争议', '仲裁', '适用法律', '联合体', '分包', '财务', '营业执照', '签字盖章',
+      'qualification', 'eligibility', 'experience', 'net worth', 'turnover', 'bid security', 'EMD', 'bank guarantee', 'performance security', 'payment', 'liquidated damages', 'liability', 'indemn', 'insurance', 'termination', 'arbitration', 'governing law', 'consortium', 'subcontract', 'confidential', 'warranty'] },
+    { id: 'c-dev', category: 'deviation', label: '偏差', weight: 1.5, enabled: true, keywords: [
+      '偏差', '偏离', '不接受', '实质性响应', '负偏离', '否决', '废标', '无效投标', '例外',
+      'deviation', 'exception', 'non-?compliance', 'non-responsive', 'reject', 'disqualif', 'substantially responsive', 'conditional bid', 'assumption'] },
+  ],
+  // 能用关键词表达的规则只填关键词（页面上不用碰正则）；需要数字、前后文限制的保留正则，在「高级」里
+  mandatory: [
+    { id: 'm-star', label: '★ / ▲ 实质性条款标记', pattern: '', keywords: ['★','▲'], strength: 'mandatory', enabled: true },
+    { id: 'm-cn-must', label: '中文强制：必须 / 务必', pattern: '', keywords: ['必须','务必'], strength: 'mandatory', enabled: true },
+    { id: 'm-cn-shall', label: '中文一般要求：应当 / 须 / 应…', pattern: '(应当|须(?!知)|应(?:满足|具备|提供|保证|符合|按|在|于))', strength: 'required', enabled: true },
+    { id: 'm-cn-no', label: '中文否决：不得 / 禁止 / 否则无效', pattern: '', keywords: ['不得','严禁','禁止','不允许','否则将','否则视为','否则按','视为无效','作废标处理','否决其投标','废标'], strength: 'prohibited', enabled: true },
+    { id: 'm-threshold', label: '数值门槛：不低于 / 不少于 / not less than', pattern: '(应?不(?:低于|少于|小于|超过|大于|高于)\\s*\\d|至少\\s*\\d|\\b(?:not less than|no less than|not (?:to )?exceed|at least|minimum of)\\s+\\d)', strength: 'mandatory', enabled: true },
+    { id: 'm-en-must', label: '英文强制：must / mandatory / essential', pattern: '\\b(must|mandatory|mandatorily|essential(?:ly)? required|minimum (?:eligibility|qualification) (?:criteria|requirements?))\\b', strength: 'mandatory', enabled: true },
+    { id: 'm-en-shall', label: '英文一般要求：shall / is required to', pattern: '', keywords: ['shall','is required to','are required to'], strength: 'required', enabled: true },
+    { id: 'm-en-no', label: '英文否决：will be rejected / disqualified', pattern: '\\b(will be rejected|shall be rejected|liable (?:to be|for) reject(?:ed|ion)|(?:bids?|proposals?|offers?|tenders?) (?:will|shall) not be (?:accepted|considered|evaluated)|disqualif(?:ied|ication)|non-?responsive)\\b', strength: 'prohibited', enabled: true },
+    { id: 'm-should', label: '建议性：宜 / should / preferably', pattern: '(\\bshould\\b|\\bpreferabl|\\brecommended\\b|宜(?:采用|设置|选用))', strength: 'recommended', enabled: true },
+  ],
+  fields: [
+    { id: 'f-energy', key: 'energy', label: '储能容量', pattern: '(\\d[\\d,.]*\\s*(?:MWh|GWh|兆瓦时))', normalize: 'number', unit: 'MWh', checkConflict: true, enabled: true },
+    { id: 'f-power', key: 'power', label: '功率', pattern: '(\\d[\\d,.]*\\s*(?:MW|兆瓦))(?!h)', normalize: 'number', unit: 'MW', checkConflict: true, enabled: true },
+    { id: 'f-deadline', key: 'deadline', label: '投标截止时间', pattern: '(?:投标截止时间|递交截止时间|开标时间|bid due date|last date (?:and time )?(?:for|of) (?:online )?(?:submission|bid submission)|proposal due date|deadline for submission|(?:rfp|tender|bid|proposal)s? closing (?:time|date))(?:[^\\d\\n]|\\d{1,2}(?:[:.]\\d{2})?\\s*(?:am|pm)\\b){0,50}?(\\d{4}\\s*[-./年]\\s*\\d{1,2}\\s*[-./月]\\s*\\d{1,2}日?|\\d{1,2}[-./]\\d{1,2}[-./]\\d{4}|\\d{1,2}\\s*(?:st|nd|rd|th)?\\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?,?\\s+\\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?\\s+\\d{1,2},?\\s+\\d{4})', normalize: 'date', checkConflict: true, enabled: true },
+    { id: 'f-security', key: 'bid_security', label: '投标保证金', pattern: '(?:投标保证金|bid security|earnest money deposit|EMD)[^\\d]{0,60}?((?:INR|Rs\\.?|USD|US\\$|\\$|人民币|¥)\\s?\\d[\\d,.]*\\s*(?:万元|元|lakhs?|crores?|million)?|\\d[\\d,.]*\\s*(?:万元|元|lakhs?|crores?|million))', normalize: 'text', checkConflict: true, enabled: true },
+    { id: 'f-warranty', key: 'warranty', label: '质保期', pattern: '(?:质保期|保修期|warranty period|defect liability period)[^\\d]{0,40}(\\d{1,2}\\s*(?:年|个月|years?|months?))', normalize: 'text', checkConflict: true, enabled: true },
+    { id: 'f-rte', key: 'rte', label: '往返效率', pattern: '(?:往返效率|循环效率|round[- ]trip efficiency|RTE)[^\\d]{0,40}(\\d{2}(?:\\.\\d+)?\\s*%)', normalize: 'number', unit: '%', checkConflict: true, enabled: true },
+    { id: 'f-cycles', key: 'cycles', label: '循环次数', pattern: '(\\d[\\d,]{2,}\\s*(?:次循环|cycles?))', normalize: 'number', checkConflict: false, enabled: true },
+    { id: 'f-delivery', key: 'delivery_period', label: '交货 / 工期', pattern: '(?:交货期|供货期|工期|计划工期|completion period|delivery period|commissioning within)[^\\d]{0,40}(\\d{1,4}\\s*(?:日历天|天|日|个月|days?|months?|weeks?))', normalize: 'text', checkConflict: true, enabled: true },
+    { id: 'f-ld', key: 'ld', label: '违约金比例', pattern: '(?:违约金|误期赔偿|liquidated damages)[^%]{0,80}?(\\d+(?:\\.\\d+)?\\s*%)', normalize: 'number', unit: '%', checkConflict: false, enabled: true },
+    { id: 'f-validity', key: 'validity', label: '投标有效期', pattern: '(?:投标有效期|bid validity|validity of (?:the )?(?:bid|proposal))[^\\d]{0,40}(\\d{2,3}\\s*(?:日历天|天|日|days?))', normalize: 'text', checkConflict: true, enabled: true },
+  ],
+  risks: [
+    { id: 'r-unlimited', label: '无限责任 / 无上限赔偿', pattern: '(无限责任|不设上限|without (?:any )?(?:cap|limit)\\b|unlimited liability|uncapped)', severity: 'high', category: 'commercial', advice: '提出责任上限偏差（通常为合同价 100%），间接损失排除。', enabled: true },
+    { id: 'r-ld-high', label: '违约金比例偏高', pattern: '(liquidated damages[^.]{0,120}(?:[2-9]\\d|1\\d{2})\\s*%|违约金[^。]{0,60}(?:[2-9]\\d|1\\d{2})\\s*%)', severity: 'high', category: 'commercial', advice: '核对违约金累计上限，建议 10% 封顶。', enabled: true },
+    { id: 'r-perf-guar', label: '长期性能 / 容量保证', pattern: '', keywords: ['capacity guarantee','performance guarantee','availability guarantee','容量保证','性能保证','可用率不低于'], severity: 'medium', category: 'technical', advice: '与产品衰减曲线和增容方案核对，明确增容责任与费用。', enabled: true },
+    { id: 'r-augment', label: '增容（Augmentation）责任', pattern: '', keywords: ['augmentation','增容','补电'], severity: 'medium', category: 'technical', advice: '确认增容由谁出资、何时触发，计入全生命周期报价。', enabled: true },
+    { id: 'r-local', label: '本地化 / 原产地要求', pattern: '', keywords: ['domestic content','local content','make in india','ALMM','country of origin','原产地','国产化率'], severity: 'high', category: 'commercial', advice: '核对电芯 / 模组原产地是否满足，必要时找本地合作方。', enabled: true },
+    { id: 'r-permanent-conf', label: '永久保密', pattern: '(永久保密|in perpetuity|perpetual(?:ly)? confidential)', severity: 'medium', category: 'commercial', advice: '建议改为合同终止后 3-5 年。', enabled: true },
+    { id: 'r-pay-late', label: '付款节点后置 / 背靠背', pattern: '(back[- ]to[- ]back|背靠背|验收后付款|after (?:final )?acceptance)', severity: 'medium', category: 'commercial', advice: '争取预付款与到货款比例，避免背靠背条款。', enabled: true },
+    { id: 'r-reject', label: '否决 / 废标条款', pattern: '', keywords: ['否决其投标','作废标处理','按无效投标','will be rejected','liable to be rejected','summarily rejected'], severity: 'high', category: 'deviation', advice: '逐条列入应标 checklist，交标前核对。', enabled: true },
+    { id: 'r-fire', label: '消防 / 安全标准', pattern: '(NFPA\\s?855|UL\\s?9540A?|大规模燃烧|热失控)', severity: 'medium', category: 'technical', advice: '确认已有测试报告覆盖要求的版本。', enabled: true },
+    { id: 'r-currency', label: '汇率 / 币种风险', pattern: '', keywords: ['exchange rate variation','foreign exchange','汇率风险','以人民币以外'], severity: 'low', category: 'price', advice: '报价注明币种与汇率基准日，争取汇率调整条款。', enabled: true },
+  ],
+  owners: [
+    { category: 'technical', role: 'SC', reviewer: 'PM', dueOffsetDays: 7 },
+    { category: 'delivery', role: 'PM', reviewer: 'SLS', dueOffsetDays: 6 },
+    { category: 'price', role: 'SLS', reviewer: 'BSD', dueOffsetDays: 4 },
+    { category: 'commercial', role: 'SLS', reviewer: 'BSD', dueOffsetDays: 5 },
+    { category: 'deviation', role: 'QA', reviewer: 'BSD', dueOffsetDays: 3 },
+  ],
+  options: { minCharsPerPage: 40, maxPagesPerFile: 600, clauseMinLength: 24, clauseMaxLength: 700, minCategoryScore: 2 },
+  judge: {
+    enabled: true,
+    // 标准提示词：像 agent.md，按小标题分段；输出格式、引用规则、安全约束写在代码里（judge.ts），不在这里
+    prompt: `## 角色与目标
+你在帮储能（BESS）投标团队审阅招标文件，找出投标方需要响应的要求，并按审查清单逐项给出结论。只做拆解和审查，不给报价决策或报价建议。
+
+## 注意力：先看什么，什么不算要求
+先看否决 / 废标条款、强制门槛、责任与赔偿、付款与保函，再看一般义务。
+定义、背景介绍、目录、格式说明、示例文本不算要求。
+
+## 解析方法
+逐条看整句的实际约束，不因为出现某个词就下结论。
+类别：technical 技术参数与认证；delivery 工期、交付、安装调试、运维；price 报价、税费、币种；commercial 资格、保证金、付款、合同责任；deviation 否决、废标和偏差规定。
+强度：prohibited 不满足就否决或废标；mandatory 明确必须满足的门槛（must、必须、★、不低于某数值）；required 一般义务（shall、应当）；recommended 建议项。
+数值原样抽出，不换算、不估计；拿不准时给较低置信度，交给人复核。
+
+## 中文要点的写法
+一句话、不超过 40 字，写「谁 + 做什么 + 门槛」，例如「投标人须提交 UL9540A 大规模燃烧测试报告」。`,
+    locked: DEFAULT_LOCKED,
+    policies: [],
+    examples: [
+      { id: 'ex-reject', text: 'Bids without the earnest money deposit will be rejected as non-responsive.', isRequirement: true, category: 'commercial', strength: 'prohibited', note: '不交保证金直接废标', enabled: true },
+      { id: 'ex-must', text: 'The Bidder must submit the UL9540A test report with its technical proposal.', isRequirement: true, category: 'technical', strength: 'mandatory', enabled: true },
+      { id: 'ex-shall', text: 'The Supplier shall supply the BESS within 11 months of the effective date.', isRequirement: true, category: 'delivery', strength: 'required', enabled: true },
+      { id: 'ex-cn-reject', text: '投标报价高于最高投标限价的，作废标处理。', isRequirement: true, category: 'price', strength: 'prohibited', enabled: true },
+      { id: 'ex-cn-shall', text: '投标人应当提供近三年储能项目业绩证明材料。', isRequirement: true, category: 'commercial', strength: 'required', enabled: true },
+      { id: 'ex-def', text: '"Contract Price" means the total amount payable to the Contractor under the Contract.', isRequirement: false, note: '只是定义，不是要求', enabled: true },
+    ],
+    // 2026-11-11 SCNet DeepSeek 实测：每批 30 条约 90–100 秒，贴着 120 秒超时；改小每批、加大并发
+    batchSize: 20, concurrency: 8, minConfidence: 0.6,
+  },
+};

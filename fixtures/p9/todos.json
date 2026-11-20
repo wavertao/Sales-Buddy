@@ -1,0 +1,117 @@
+{
+  "bidId": "BID-20261010-003",
+  "demoClock": "2026-10-24",
+  "todos": [
+    {
+      "id": "TD-01",
+      "title": "补齐3个基本信息字段（项目地点/供货范围/保证金）",
+      "source": "①商机判断",
+      "assignee": "李明",
+      "due": "2026-10-25",
+      "status": "completed",
+      "priority": "P0",
+      "completedAt": "2026-10-24T16:32:00+08:00",
+      "result": "项目地点补福建宁德；供货范围补DC Block+PCS；投标保证金补500万元（2%）。"
+    },
+    {
+      "id": "TD-02",
+      "title": "指派2条拆解条目的责任人",
+      "source": "③标书分解",
+      "assignee": "王强",
+      "due": "2026-10-24",
+      "status": "pending",
+      "priority": "P0"
+    },
+    {
+      "id": "TD-03",
+      "title": "明确远程调试实现方案与成本",
+      "source": "会议·澄清会",
+      "assignee": "陈磊",
+      "due": "2026-10-26",
+      "status": "pending",
+      "priority": "P1"
+    },
+    {
+      "id": "TD-04",
+      "title": "质保5年/10年两版重新报价",
+      "source": "会议·澄清会",
+      "assignee": "王芳",
+      "due": "2026-10-28",
+      "status": "completed",
+      "priority": "P1"
+    },
+    {
+      "id": "TD-05",
+      "title": "审阅拆标分解表并提交BSD",
+      "source": "③标书分解",
+      "assignee": "陈磊",
+      "due": "2026-10-22",
+      "status": "pending",
+      "priority": "P0"
+    },
+    {
+      "id": "TD-06",
+      "title": "处理技术评审与报价排期冲突",
+      "source": "③标书分解",
+      "assignee": "张伟",
+      "due": "2026-10-21T09:00:00+08:00",
+      "status": "pending",
+      "priority": "P1"
+    },
+    {
+      "id": "TD-07",
+      "title": "补充储能系统消防方案细节",
+      "source": "会议·澄清会",
+      "assignee": "陈磊",
+      "due": "2026-10-26",
+      "status": "pending",
+      "priority": "P1"
+    },
+    {
+      "id": "TD-08",
+      "title": "技术标12项强制响应逐项回填",
+      "source": "③标书分解",
+      "assignee": "陈磊",
+      "due": "2026-10-27",
+      "status": "pending",
+      "priority": "P0"
+    },
+    {
+      "id": "TD-09",
+      "title": "报价文件过BSD评审",
+      "source": "报价提报",
+      "assignee": "李明",
+      "due": "2026-10-28",
+      "status": "pending",
+      "priority": "P0"
+    },
+    {
+      "id": "TD-10",
+      "title": "答疑第4/7条书面回复客户",
+      "source": "⑤澄清跟进",
+      "assignee": "陈磊",
+      "due": "2026-10-25",
+      "status": "pending",
+      "priority": "P1"
+    },
+    {
+      "id": "TD-11",
+      "title": "标书定稿评审",
+      "source": "⑥投标文件制作",
+      "assignee": "王强",
+      "due": "2026-11-01",
+      "status": "pending",
+      "priority": "P1"
+    },
+    {
+      "id": "TD-12",
+      "title": "上传交标凭证",
+      "source": "⑦交标",
+      "assignee": "李明",
+      "due": "2026-11-05",
+      "status": "pending",
+      "priority": "P0"
+    }
+  ],
+  "countsNote": "以演示时钟2026-10-24计：逾期=due早于2026-10-24且未完成（TD-05、TD-06共2条）；已完成TD-01、TD-04共2条；其余8条待办。"
+}
