@@ -11,6 +11,8 @@ type Any=any;
  * 主会话多人协同；@ 专家后，专家在子会话里执行，完成后回群里汇报。
  */
 const POLL_MS=3000;
+/** 接口返回不是列表（多为服务未重启、仍是旧版本）时给出明确提示，避免白屏。 */
+const asList=(r:Any):Any[]=>{if(Array.isArray(r))return r;throw new Error('项目空间接口未就绪，请重启服务（npm run dev）后刷新页面');};
 const expertOf=(id:string)=>spaceExperts.find(e=>e.id===id);
 const clock=(iso:string)=>new Date(iso).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'});
 const dayLabel=(iso:string)=>new Date(iso).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric',timeZone:'Asia/Shanghai'});
@@ -24,7 +26,7 @@ export function ProjectSpaces({api,user,launch}:Any){
  const [spaces,setSpaces]=useState<Any[]>([]),[spaceId,setSpaceId]=useState<string>(initial.space),[threadId,setThreadId]=useState<string>(initial.thread),[detail,setDetail]=useState<Any>(null);
  const [error,setError]=useState(''),[creating,setCreating]=useState(false),[loaded,setLoaded]=useState(false);
  const alive=useRef(true);useEffect(()=>()=>{alive.current=false;},[]);
- async function loadSpaces(){const rows=await api('/project-spaces');if(!alive.current)return rows;setSpaces(rows);setLoaded(true);return rows;}
+ async function loadSpaces(){const rows=asList(await api('/project-spaces'));if(!alive.current)return rows;setSpaces(rows);setLoaded(true);return rows;}
  async function loadDetail(id=spaceId,thread=threadId){if(!id)return;const d=await api('/project-spaces/'+encodeURIComponent(id)+(thread?'?thread='+encodeURIComponent(thread):''));if(!alive.current)return;setDetail(d);if(d.activeThreadId!==thread)setThreadId(d.activeThreadId);writeUrl(d.space.id,d.activeThreadId,d.activeThreadId===d.space.id+':main');}
  const run=(f:()=>Promise<unknown>)=>{setError('');f().catch((e:Error)=>alive.current&&setError(e.message));};
  useEffect(()=>{run(async()=>{const rows=await loadSpaces();if(!spaceId&&rows?.[0])setSpaceId(rows[0].id);});},[]);
@@ -145,7 +147,7 @@ function Composer({api,space,thread,isMain,modelConfigured,onSent,onError}:Any){
 
 function AddMemberDialog({api,space,onClose,onAdded,onError}:Any){
  const [tab,setTab]=useState<'user'|'expert'>('user'),[people,setPeople]=useState<Any[]>([]),[userId,setUserId]=useState(''),[role,setRole]=useState<string>('SC'),[busy,setBusy]=useState(false);
- useEffect(()=>{void api('/project-spaces/options/members').then(setPeople).catch((e:Error)=>onError(e.message));},[]);
+ useEffect(()=>{void api('/project-spaces/options/members').then((r:Any)=>setPeople(asList(r))).catch((e:Error)=>onError(e.message));},[]);
  const taken=new Set(space.members.map((m:Any)=>m.kind==='user'?m.userId:m.expertId));
  async function add(body:Any){setBusy(true);try{await api('/project-spaces/'+space.id+'/members',{method:'POST',body});onAdded();}catch(e:Any){onError(e.message);}finally{setBusy(false);}}
  return <div className="ps-mask" onClick={onClose}><div className="ps-dialog" role="dialog" aria-label="添加成员或专家" onClick={e=>e.stopPropagation()}>
@@ -161,7 +163,7 @@ function AddMemberDialog({api,space,onClose,onAdded,onError}:Any){
 
 function NewSpaceDialog({api,onClose,onCreated}:Any){
  const [q,setQ]=useState(''),[rows,setRows]=useState<Any[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- useEffect(()=>{const t=setTimeout(()=>void api('/project-spaces/options/opportunities?q='+encodeURIComponent(q)).then(setRows).catch((e:Error)=>setError(e.message)),200);return()=>clearTimeout(t);},[q]);
+ useEffect(()=>{const t=setTimeout(()=>void api('/project-spaces/options/opportunities?q='+encodeURIComponent(q)).then((r:Any)=>setRows(asList(r))).catch((e:Error)=>setError(e.message)),200);return()=>clearTimeout(t);},[q]);
  async function create(id:string){setBusy(true);try{onCreated(await api('/project-spaces',{method:'POST',body:{opportunityId:id}}));}catch(e:Any){setError(e.message);}finally{setBusy(false);}}
  return <div className="ps-mask" onClick={onClose}><div className="ps-dialog" role="dialog" aria-label="新建项目空间" onClick={e=>e.stopPropagation()}>
   <div className="ps-dialog-head"><h3>新建项目空间</h3><button className="ps-icon-btn" aria-label="关闭" onClick={onClose}><X size={16}/></button></div>
@@ -175,7 +177,7 @@ function NewSpaceDialog({api,onClose,onCreated}:Any){
 /** 小Cue 里的“项目空间待办”。 */
 export function SpaceTodos({api,onOpen}:Any){
  const [rows,setRows]=useState<Any[]|null>(null),[error,setError]=useState('');
- const load=()=>api('/project-spaces/todos/mine').then(setRows).catch((e:Error)=>setError(e.message));
+ const load=()=>api('/project-spaces/todos/mine').then((r:Any)=>setRows(asList(r))).catch((e:Error)=>setError(e.message));
  useEffect(()=>{void load();},[]);
  if(error)return <p className="cue-error" role="alert">{error}</p>;
  if(!rows?.length)return null;
