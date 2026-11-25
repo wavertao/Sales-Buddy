@@ -62,47 +62,47 @@
 
 ## 4. 本批真实Mock PPT：10套、80页
 
-均为16:9、英文、可编辑原生文本及双栏版式。每套8页：封面、6个业务主题、下一步讨论。每页标记MOCK，原文件备注包含公开背景来源URL。所有文件位于`knowledge/presentations/library/`，实际页码与缩略图均可在产品中查看。
+均为16:9、英文、可编辑原生文本及双栏版式。每套8页：封面、6个业务主题、下一步讨论。每页标记MOCK，原文件备注包含公开背景来源URL。所有文件位于`assets/presentations/library/`，实际页码与缩略图均可在产品中查看。
 
 ### PRE-01 客户首次交流介绍
 
-[下载PPT](../knowledge/presentations/library/PRE-01.pptx)。正文覆盖客户优先事项、应用场景、关键干系人、交流范围、下次会议所需信息及待讨论问题。适合S0/S1初访或通用需求交流。
+[下载PPT](../assets/presentations/library/PRE-01.pptx)。正文覆盖客户优先事项、应用场景、关键干系人、交流范围、下次会议所需信息及待讨论问题。适合S0/S1初访或通用需求交流。
 
 ### PRE-02 高层战略会晤
 
-[下载PPT](../knowledge/presentations/library/PRE-02.pptx)。覆盖经营目标、项目组合优先级、投资讨论条件、交付信心、合作框架及决策议程。用作管理层交流框架，不代替客户决策链调查。
+[下载PPT](../assets/presentations/library/PRE-02.pptx)。覆盖经营目标、项目组合优先级、投资讨论条件、交付信心、合作框架及决策议程。用作管理层交流框架，不代替客户决策链调查。
 
 ### PRE-04 大型储能解决方案
 
-[下载PPT](../knowledge/presentations/library/PRE-04.pptx)。覆盖运行目标、系统架构、接口供货边界、现场准备、性能讨论口径及技术评审。适合电网侧/大型储能项目的S2–S4交流。
+[下载PPT](../assets/presentations/library/PRE-04.pptx)。覆盖运行目标、系统架构、接口供货边界、现场准备、性能讨论口径及技术评审。适合电网侧/大型储能项目的S2–S4交流。
 
 ### PRE-05 工商业储能价值交流
 
-[下载PPT](../knowledge/presentations/library/PRE-05.pptx)。覆盖设施目标、负荷电价输入、运行约束、价值评估口径、客户评审及数据收集。用于工商业储能早期交流，不含虚构收益结果。
+[下载PPT](../assets/presentations/library/PRE-05.pptx)。覆盖设施目标、负荷电价输入、运行约束、价值评估口径、客户评审及数据收集。用于工商业储能早期交流，不含虚构收益结果。
 
 ### PRE-06 渠道合作与激活
 
-[下载PPT](../knowledge/presentations/library/PRE-06.pptx)。覆盖伙伴目标、能力讨论、首个机会评审、双方交付边界、激活里程碑及合作问题。适合渠道/合作伙伴型客户。
+[下载PPT](../assets/presentations/library/PRE-06.pptx)。覆盖伙伴目标、能力讨论、首个机会评审、双方交付边界、激活里程碑及合作问题。适合渠道/合作伙伴型客户。
 
 ### PRD-01 产品组合与选型
 
-[下载PPT](../knowledge/presentations/library/PRD-01.pptx)。覆盖产品交流框架、电池与功率转换、控制通信、安全资料、选型输入及澄清问题。不编造真实SKU、效率、质保或认证编号。
+[下载PPT](../assets/presentations/library/PRD-01.pptx)。覆盖产品交流框架、电池与功率转换、控制通信、安全资料、选型输入及澄清问题。不编造真实SKU、效率、质保或认证编号。
 
 ### MID-01 技术澄清与方案评审
 
-[下载PPT](../knowledge/presentations/library/MID-01.pptx)。覆盖需求基线、供货范围、接口责任、同口径方案比较、评审依据及采购评审问题。是英国一期技术会晤测试的主要原页来源。
+[下载PPT](../assets/presentations/library/MID-01.pptx)。覆盖需求基线、供货范围、接口责任、同口径方案比较、评审依据及采购评审问题。是英国一期技术会晤测试的主要原页来源。
 
 ### MID-04 合同交接与交付启动
 
-[下载PPT](../knowledge/presentations/library/MID-04.pptx)。覆盖交付范围、协调职责、里程碑依赖、测试验收口径、变更管理及启动会议决策，用于S5/S6衔接。
+[下载PPT](../assets/presentations/library/MID-04.pptx)。覆盖交付范围、协调职责、里程碑依赖、测试验收口径、变更管理及启动会议决策，用于S5/S6衔接。
 
 ### POST-02 运维培训与服务支持
 
-[下载PPT](../knowledge/presentations/library/POST-02.pptx)。覆盖运行交接、监控告警、维护安排、事件沟通、服务边界及服务评审。需要真实产品手册与合同补充后才能面向真实客户使用。
+[下载PPT](../assets/presentations/library/POST-02.pptx)。覆盖运行交接、监控告警、维护安排、事件沟通、服务边界及服务评审。需要真实产品手册与合同补充后才能面向真实客户使用。
 
 ### GEN-01 示例案例讨论
 
-[下载PPT](../knowledge/presentations/library/GEN-01.pptx)。正文明确为假设场景，包含大型储能、工商业、欧洲、北美、中东和亚太交流视角。它不是“已获授权的真实客户案例”，不能对外称为企业业绩。
+[下载PPT](../assets/presentations/library/GEN-01.pptx)。正文明确为假设场景，包含大型储能、工商业、欧洲、北美、中东和亚太交流视角。它不是“已获授权的真实客户案例”，不能对外称为企业业绩。
 
 ## 5. 原始文件、来源与真实性
 

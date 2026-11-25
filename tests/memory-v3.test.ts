@@ -1,8 +1,9 @@
+import {testDirectory} from './helpers/temp.ts';
 import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync} from 'node:fs';
+import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-process.env.DATABASE_PATH=join(mkdtempSync(join(process.cwd(),'data-test-memory-')),'app.sqlite');process.env.MEMORY_ROOT=join(process.env.DATABASE_PATH,'..','memory');process.env.MEMORY_MIGRATION_REPORT_PATH=join(process.env.DATABASE_PATH,'..','migration.json');
+process.env.DATABASE_PATH=join(testDirectory("memory-"),'app.sqlite');process.env.MEMORY_ROOT=join(process.env.DATABASE_PATH,'..','memory');process.env.MEMORY_MIGRATION_REPORT_PATH=join(process.env.DATABASE_PATH,'..','migration.json');
 const D=await import('../apps/server/src/db.ts'),C=await import('../apps/server/src/crm.ts'),M=await import('../apps/server/src/memory.ts');const {seed}=await import('../apps/server/src/seed.ts');seed();
 const u=C.user('U-018'),other=C.user('U-019'),manager=C.user('U-020'),admin=C.user('U-ADMIN');const scope={objectType:'opportunity' as const,objectId:'OP-UK-026',customerId:'C-UK-0086'};const assessment={status:'待核实'};
 const source=(text:string,id:string,origin:any='user_input')=>({id,text,origin,createdAt:new Date().toISOString(),userId:u.id,scope,answerId:id});

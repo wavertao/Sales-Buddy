@@ -1,5 +1,6 @@
 import {webSearch,webSearchSchema,WEB_SEARCH_DESCRIPTION,searchConfigured} from './web-search.ts';
 import {authorize} from './crm.ts';
+import {deploymentCookie} from './deployment-access.ts';
 import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -21,7 +22,8 @@ export function createMcpServer(u:User){
 }
 export async function connectMcp(token:string){
  const client=new Client({name:'sales-buddy-agent',version:'0.1.0'});
- const transport=new StreamableHTTPClientTransport(new URL('http://127.0.0.1:'+(process.env.APP_PORT||3001)+'/mcp'),{requestInit:{headers:{Authorization:'Bearer '+token}}});
+ const cookie=deploymentCookie();
+ const transport=new StreamableHTTPClientTransport(new URL('http://127.0.0.1:'+(process.env.APP_PORT||3001)+'/mcp'),{requestInit:{headers:{Authorization:'Bearer '+token,...(cookie?{Cookie:cookie}:{})}}});
  await client.connect(transport);return client;
 }
 export async function callMcp(client:Client,name:string,args:Record<string,unknown>){

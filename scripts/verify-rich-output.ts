@@ -1,3 +1,4 @@
+import {mkdirSync as ensureReportDirectory} from 'node:fs';ensureReportDirectory('runtime/reports',{recursive:true});
 import {writeFileSync} from 'node:fs';
 import {parseVisualization} from '../packages/visualization.ts';
 const base='http://127.0.0.1:3001';
@@ -10,4 +11,4 @@ const history=await call('/conversations/'+c.id);const answer=history.messages.f
 const blocks=[...(answer?.content||'').matchAll(/```echarts?\s*\n([\s\S]*?)```/g)].map(m=>parseVisualization(m[1]));
 const sources=answer?.sources?.filter((s:any)=>s.sourceKind==='knowledge')||[];
 const result={at:new Date().toISOString(),conversationId:c.id,runId:run.id,answerId:answer?.id,status:blocks.some(b=>b.type==='table')&&sources.length&&sources.every((s:any)=>!s.recordId.startsWith('KB-SRC-'))?'passed':'failed',tables:blocks.filter(b=>b.type==='table').length,knowledgeIds:sources.map((s:any)=>s.recordId),scope:'单条真实模型输出协议验证；不等于30题能力或专家评审通过'};
-writeFileSync('docs/rich-output-live-result.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));if(result.status!=='passed')process.exitCode=1;
+writeFileSync('runtime/reports/rich-output-live-result.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));if(result.status!=='passed')process.exitCode=1;

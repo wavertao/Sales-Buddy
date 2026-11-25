@@ -1,8 +1,9 @@
+import {testDirectory} from './helpers/temp.ts';
 import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,readFileSync} from 'node:fs';
+import {writeFileSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
-const path=join(mkdtempSync(join(process.cwd(),'data-test-config-')),'.env');
+const path=join(testDirectory("config-"),'.env');
 process.env.MODEL_CONFIG_PATH=path;
 writeFileSync(path,'APP_PORT=3001\nMODEL_PROTOCOL=chat_completions\nMODEL_API_BASE_URL=https://example.test/v1\nMODEL_NAME=sample\nMODEL_API_KEY=test-secret\nMODEL_TIMEOUT_MS=120000\n# retained comment\n');
 const M=await import('../apps/server/src/model-config.ts');

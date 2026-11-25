@@ -1,0 +1,28 @@
+import {existsSync,readFileSync,writeFileSync,mkdirSync,cpSync,readdirSync,statSync} from 'node:fs';
+import {resolve,join,dirname,relative} from 'node:path';
+import {parseEnv} from 'node:util';
+import {DatabaseSync} from 'node:sqlite';
+import {createHash} from 'node:crypto';
+const source=resolve(process.argv[2]),dest=resolve(process.argv[3]);if(existsSync(dest))throw Error('Snapshot destination must be new');mkdirSync(dest,{recursive:true});
+const env=parseEnv(readFileSync(join(source,'.env'),'utf8')),dbFile=resolve(source,env.DATABASE_PATH||'runtime/app/app.sqlite');
+const db=new DatabaseSync(dbFile,{readOnly:true});const active=db.prepare("SELECT COUNT(*) n FROM documents WHERE collection IN ('runs','presentation_jobs') AND json_extract(data,'$.status')='running'").get().n;if(active)throw Error('Active jobs exist. Retry when idle.');
+mkdirSync(join(dest,'app'),{recursive:true});const snapshot=join(dest,'app/app.sqlite');db.exec("VACUUM INTO '"+snapshot.replaceAll("'","''")+"'");db.close();
+const copy=(from,to)=>{if(existsSync(from))cpSync(from,to,{recursive:true});};
+copy(resolve(source,env.MEMORY_ROOT||join(dirname(dbFile),'memory')),join(dest,'app/memory'));
+copy(resolve(source,env.MATERIAL_ROOT||join(dirname(dbFile),'materials')),join(dest,'app/materials'));
+const canonical=resolve(import.meta.dirname,'..');copy(join(canonical,'knowledge'),join(dest,'knowledge'));copy(join(canonical,'assets'),join(dest,'assets'));
+const legacy={internal:'sales/guides',strategic:'sales/strategic',playbooks:'sales/playbooks',stages:'sales/stages',regions:'sales/regions',glossary:'sales/glossary',cards:'sales/cards',sources:'research/sources'};
+for(const[from,to]of Object.entries(legacy))copy(join(source,'knowledge',from),join(dest,'knowledge',to));
+copy(join(source,'assets/presentations'),join(dest,'assets/presentations'));copy(join(source,'knowledge/presentations'),join(dest,'assets/presentations'));
+copy(join(source,'knowledge/sales'),join(dest,'knowledge/sales'));copy(join(source,'knowledge/research'),join(dest,'knowledge/research'));copy(join(source,'knowledge/navigator'),join(dest,'knowledge/navigator'));
+const prefix=source.replaceAll('\\','/'),pairs=[['/runtime/app','/opt/sales-buddy/shared/app'],['/data','/opt/sales-buddy/shared/app'],['/assets/presentations','/opt/sales-buddy/current/assets/presentations'],['/knowledge/presentations','/opt/sales-buddy/current/assets/presentations'],...Object.entries(legacy).map(([a,b])=>['/knowledge/'+a,'/opt/sales-buddy/current/knowledge/'+b]),['','/opt/sales-buddy/current']];
+function relocate(v){if(Array.isArray(v))return v.map(relocate);if(v&&typeof v==='object')return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,relocate(x)]));if(typeof v!=='string')return v;const normalized=v.replaceAll('\\','/');for(const[a,b]of pairs){const old=prefix+a;if(normalized===old||normalized.startsWith(old+'/'))return b+normalized.slice(old.length);}return v;}
+const snap=new DatabaseSync(snapshot);const before={records:snap.prepare('SELECT COUNT(*) n FROM records').get().n,documents:snap.prepare('SELECT COUNT(*) n FROM documents').get().n,events:snap.prepare('SELECT COUNT(*) n FROM events').get().n};let changed=0;
+snap.exec('BEGIN IMMEDIATE');for(const r of snap.prepare('SELECT collection,id,data FROM documents').all()){const next=JSON.stringify(relocate(JSON.parse(r.data)));if(next!==r.data){snap.prepare('UPDATE documents SET data=? WHERE collection=? AND id=?').run(next,r.collection,r.id);changed++;}}snap.exec('COMMIT');
+const integrity=snap.prepare('PRAGMA integrity_check').get().integrity_check;const violations=snap.prepare('PRAGMA foreign_key_check').all();if(integrity!=='ok'||violations.length)throw Error('Snapshot integrity failed');
+const materials=snap.prepare("SELECT data FROM documents WHERE collection='materials'").all().map(r=>JSON.parse(r.data));const missing=[];for(const m of materials)if(m.file){const local=m.file.startsWith('/opt/sales-buddy/shared/')?join(dest,m.file.slice('/opt/sales-buddy/shared/'.length)):m.file.startsWith('/opt/sales-buddy/current/')?join(dest,m.file.slice('/opt/sales-buddy/current/'.length)):m.file;if(!existsSync(local))missing.push(m.id);}if(missing.length)throw Error('Snapshot missing material files: '+missing.join(','));snap.close();
+const cloudEnv=Object.fromEntries(Object.entries(env).filter(([k])=>/^(MODEL_|EXA_)/.test(k)));
+Object.assign(cloudEnv,{APP_HOST:'127.0.0.1',APP_PORT:'3001',DATABASE_PATH:'/opt/sales-buddy/shared/app/app.sqlite',MEMORY_ROOT:'/opt/sales-buddy/shared/app/memory',MATERIAL_ROOT:'/opt/sales-buddy/shared/app/materials',MEMORY_MIGRATION_REPORT_PATH:'/opt/sales-buddy/shared/memory-migration.json',MODEL_CONFIG_PATH:'/opt/sales-buddy/shared/app.env',PRESENTATION_ENGINE:'libreoffice',PRESENTATION_FONT:'Noto Sans CJK SC',BUSINESS_CLOCK:env.BUSINESS_CLOCK||'2026-10-25T09:00:00+08:00'});
+writeFileSync(join(dest,'app.env'),Object.entries(cloudEnv).map(([k,v])=>k+'='+JSON.stringify(v)).join('\n')+'\n',{mode:0o600});
+const manifest=[];function walk(p){for(const n of readdirSync(p)){const path=join(p,n),s=statSync(path);if(s.isDirectory())walk(path);else manifest.push({path:relative(dest,path).replaceAll('\\','/'),bytes:s.size,sha256:createHash('sha256').update(readFileSync(path)).digest('hex')});}}walk(dest);
+writeFileSync(join(dest,'manifest.json'),JSON.stringify({at:new Date().toISOString(),before,changedPathDocuments:changed,integrity,materialRecords:materials.length,missing,files:manifest},null,2));console.log(JSON.stringify({destination:dest,before,changedPathDocuments:changed,integrity,materialRecords:materials.length,files:manifest.length,bytes:manifest.reduce((n,x)=>n+x.bytes,0)}));

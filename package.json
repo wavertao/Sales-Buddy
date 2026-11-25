@@ -12,14 +12,15 @@
     "knowledge:reindex": "tsx apps/server/src/cli.ts reindex",
     "scenario:reset": "tsx apps/server/src/cli.ts reset",
     "mcp:stdio": "tsx apps/server/src/stdio.ts",
-    "test": "tsx --test tests/*.test.ts",
-    "test:ci": "node scripts/test-portable.mjs",
+    "test": "node scripts/run-tests.mjs",
+    "test:ci": "node scripts/run-tests.mjs --portable",
     "security:check": "node scripts/check-repository-secrets.mjs",
-    "test:e2e": "npm run build && playwright test",
+    "test:e2e": "npm run build && node scripts/run-tests.mjs --e2e",
     "test:live": "tsx scripts/live-eval.ts",
     "check": "tsc --noEmit",
     "knowledge:ppt:build": "tsx scripts/build-p11-library.ts",
-    "knowledge:export": "tsx scripts/export-strategic-knowledge.ts"
+    "knowledge:export": "tsx scripts/export-strategic-knowledge.ts",
+    "layout:migrate": "node scripts/migrate-project-layout.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
@@ -33,6 +34,7 @@
     "mammoth": "^1.13.0",
     "multer": "^2.5.0",
     "pdfjs-dist": "^6.4.299",
+    "pptxgenjs": "^4.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.0.0",

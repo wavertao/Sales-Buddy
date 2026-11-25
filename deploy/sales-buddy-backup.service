@@ -1,0 +1,6 @@
+[Unit]
+Description=Sales Buddy private data backup
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/opt/sales-buddy/node/bin/node /opt/sales-buddy/current/deploy/backup-pilot.mjs

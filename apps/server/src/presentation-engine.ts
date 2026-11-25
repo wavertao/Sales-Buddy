@@ -26,6 +26,7 @@ export async function inspectPptx(bytes:Buffer){
  if(!slides.length||slides.length>150)throw new Error('PPTX需包含1—150页');return{width,height,slides};
 }
 export async function createPptx(contents:SlideContent[],output:string,previewDir?:string){
+ if(process.env.PRESENTATION_ENGINE==='libreoffice')return(await import('./presentation-portable.ts')).portableCreate(contents,output,previewDir);
  const {Presentation,PresentationFile}=await artifact();const p=Presentation.create({slideSize:{width:1280,height:720}});const font=contents.some(c=>/[\u4e00-\u9fff]/.test(c.title+(c.bullets||[]).join('')))?'Microsoft YaHei':'Arial';
  const text=(s:any,value:string,x:number,y:number,w:number,h:number,size:number,color:string,bold=false)=>{const sh=s.shapes.add({geometry:'textbox',name:value.slice(0,35),position:{left:x,top:y,width:w,height:h},fill:'none',line:{fill:'none',width:0}});sh.text=value;sh.text.style={typeface:font,fontSize:size,color,bold};return sh;};
  for(const [i,c]of contents.entries()){
@@ -45,7 +46,7 @@ export async function createPptx(contents:SlideContent[],output:string,previewDi
  if(previewDir){mkdirSync(previewDir,{recursive:true});for(const [i,s]of p.slides.items.entries()){const png=await p.export({slide:s,format:'png',scale:1});writeFileSync(join(previewDir,`${i+1}.png`),new Uint8Array(await png.arrayBuffer()));}}
  return{pages:contents.length};
 }
-export async function renderPptx(file:string,out:string){const {PresentationFile,FileBlob}=await artifact();const p=await PresentationFile.importPptx(await FileBlob.load(file));mkdirSync(out,{recursive:true});for(const [i,s]of p.slides.items.entries()){const blob=await p.export({slide:s,format:'png',scale:1});writeFileSync(join(out,`${i+1}.png`),new Uint8Array(await blob.arrayBuffer()));}return{pages:p.slides.items.length};}
+export async function renderPptx(file:string,out:string){if(process.env.PRESENTATION_ENGINE==='libreoffice')return(await import('./presentation-portable.ts')).portableRender(file,out);const {PresentationFile,FileBlob}=await artifact();const p=await PresentationFile.importPptx(await FileBlob.load(file));mkdirSync(out,{recursive:true});for(const [i,s]of p.slides.items.entries()){const blob=await p.export({slide:s,format:'png',scale:1});writeFileSync(join(out,`${i+1}.png`),new Uint8Array(await blob.arrayBuffer()));}return{pages:p.slides.items.length};}
 
 export async function assemblePptx(selected:{file:string;page:number}[],output:string){
  if(!selected.length||selected.length>40)throw new Error('导出需包含1—40页');

@@ -1,9 +1,9 @@
 import {test,expect} from '@playwright/test';
 test('工作台默认隐藏且在左侧，右侧客户及关键实体可打开详情',async({page})=>{
- await page.goto('/');await page.getByRole('button',{name:/张小小/}).click();await page.getByLabel('搜索客户或项目').fill('英国储能一期');await page.getByRole('button',{name:/商机.*英国储能一期/}).click();
+ await page.goto('/');await page.getByRole('button',{name:/张小小/}).click();await page.getByRole('button',{name:'赢单领航员',exact:true}).click();await page.getByLabel('搜索客户或项目').fill('英国储能一期');await page.getByRole('button',{name:/商机.*英国储能一期/}).click();await page.getByRole('button',{name:'新建对话',exact:true}).click();
  const workbench=page.getByRole('complementary',{name:'会话工作台'}),data=page.getByRole('complementary',{name:'客户与本轮关键数据'});await expect(workbench).toHaveCount(0);await expect(data).toContainText('Northstar Energy');await data.locator('.customer-summary').click();const dialog=page.getByRole('dialog',{name:'客户详情'});await expect(dialog).toContainText('基本信息与业务内容');await expect(dialog.locator('pre')).toHaveCount(0);await page.getByRole('button',{name:'关闭实体详情'}).click();
  await page.getByRole('button',{name:'会话工作台',exact:true}).click();await expect(workbench).toBeVisible();const a=await workbench.boundingBox(),b=await page.locator('.conversation').boundingBox();expect(a!.x).toBeLessThan(b!.x);await page.getByRole('button',{name:'收起工作台',exact:true}).click();
- await expect(data.locator('.key-record').first()).toBeVisible();await data.locator('.key-record').first().click();await expect(page.getByRole('dialog',{name:'商机详情'})).toContainText('推进条件');await page.getByRole('button',{name:'关闭实体详情'}).click();await page.screenshot({path:'docs/screenshots/advisor-data-sidebar.png',fullPage:true});
+ await expect(data.locator('.key-record').first()).toBeVisible();await data.locator('.key-record').first().click();await expect(page.getByRole('dialog',{name:'商机详情'})).toContainText('推进条件');await page.getByRole('button',{name:'关闭实体详情'}).click();await page.screenshot({path:'runtime/reports/screenshots/advisor-data-sidebar.png',fullPage:true});
 });
 test('所有CRM实体返回结构化详情，跨客户权限仍受限制',async({request})=>{
  const s=await(await request.post('/api/mock-session',{data:{userId:'U-018'}})).json(),headers={Authorization:'Bearer '+s.token};
@@ -11,6 +11,6 @@ test('所有CRM实体返回结构化详情，跨客户权限仍受限制',async(
  const denied=await request.get('/api/records/C-ES-003/detail',{headers});expect(denied.status()).toBe(403);
 });
 test('增量回答和整理状态在完成前可见',async({page,request})=>{
- await page.goto('/');await page.getByRole('button',{name:/张小小/}).click();await page.getByLabel('搜索客户或项目').fill('英国储能一期');await page.getByRole('button',{name:/商机.*英国储能一期/}).click();await page.getByRole('button',{name:'新对话',exact:true}).click();
- let streamed=false,status=false;await page.route('**/api/runs/*/events',async route=>{const response=await route.fetch();const body=await response.text();streamed=body.includes('answer_delta');status=body.includes('run_phase');await route.fulfill({response,body});});await page.getByLabel('发送问题').fill('分析现状');await page.getByRole('button',{name:'发送',exact:true}).click();await expect.poll(()=>streamed&&status).toBe(true);await expect(page.locator('.message.assistant').last()).toContainText('需要你确认');
+ await page.goto('/');await page.getByRole('button',{name:/张小小/}).click();await page.getByRole('button',{name:'赢单领航员',exact:true}).click();await page.getByLabel('搜索客户或项目').fill('英国储能一期');await page.getByRole('button',{name:/商机.*英国储能一期/}).click();await page.getByRole('button',{name:'新建对话',exact:true}).click();
+ let streamed=false,status=false;await page.route('**/api/runs/*/events',async route=>{const response=await route.fetch();const body=await response.text();streamed=body.includes('answer_delta');status=body.includes('run_phase');await route.fulfill({response,body});});await page.getByLabel('发送问题').fill('分析现状');await page.getByRole('button',{name:'发送',exact:true}).click();await expect.poll(()=>streamed&&status).toBe(true);await expect(page.locator('.message.assistant').last()).toContainText('下一步推进');
 });

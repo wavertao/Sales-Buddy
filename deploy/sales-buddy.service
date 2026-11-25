@@ -1,0 +1,28 @@
+[Unit]
+Description=Sales Buddy isolated pilot service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=salesbuddy
+Group=salesbuddy
+WorkingDirectory=/opt/sales-buddy/current
+Environment=PATH=/opt/sales-buddy/node/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/opt/sales-buddy/shared/app.env
+ExecStart=/opt/sales-buddy/node/bin/node --import tsx apps/server/src/index.ts --production
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+MemoryMax=2400M
+TasksMax=128
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/sales-buddy/shared
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,8 +1,9 @@
+import {testDirectory} from './helpers/temp.ts';
 import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
-const root=mkdtempSync(join(process.cwd(),'data-test-portrait-'));process.env.DATABASE_PATH=join(root,'app.sqlite');process.env.MEMORY_ROOT=join(root,'memory');
+const root=testDirectory("portrait-");process.env.DATABASE_PATH=join(root,'app.sqlite');process.env.MEMORY_ROOT=join(root,'memory');
 const D=await import('../apps/server/src/db.ts'),C=await import('../apps/server/src/crm.ts'),P=await import('../apps/server/src/project-portrait.ts');const {seed}=await import('../apps/server/src/seed.ts');seed();const u=C.user('U-018'),manager=C.user('U-020'),admin=C.user('U-ADMIN');const scope={objectType:'opportunity' as const,objectId:'OP-UK-026',customerId:'C-UK-0086'};
 const source=(id:string,text:string,createdAt=new Date().toISOString())=>({id,text,createdAt,userId:u.id,origin:'user_input' as const,scope});after(()=>D.db.close());
 test('项目画像保留CRM正式阶段，提问和准备要求不能写成事实',()=>{const p=P.getPortrait(u,scope);assert.equal(p.crmStage,'S3');for(const q of ['融资和并网是否落实？','准备会议并确认供货接口和交付安排','请帮我确认土地审批状态']){const next=P.applyPortraitUpdates(u,scope,source(q,q));assert.equal(Object.keys(next.fields).length,0);}assert.equal(D.record(scope.objectId).stage,'S3');});

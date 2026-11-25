@@ -1151,7 +1151,7 @@ interface SourceRef {
 数据库是结构化记忆和版本的事实源，同时生成可读文件：
 
 ~~~text
-data/memory/
+runtime/app/memory/
   entities/
     customers/C-UK-0086/Memory.md
     opportunities/OP-UK-026/Memory.md
@@ -1741,7 +1741,7 @@ sales-buddy-mock/
 APP_HOST=127.0.0.1
 APP_PORT=3001
 WEB_PORT=3000
-DATABASE_PATH=./data/app.sqlite
+DATABASE_PATH=./runtime/app/app.sqlite
 APP_MODE=mock
 AGENT_MODE=replay
 MODEL_API_BASE_URL=

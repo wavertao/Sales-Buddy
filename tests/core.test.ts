@@ -1,11 +1,12 @@
+import {testDirectory} from './helpers/temp.ts';
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import {DatabaseSync} from 'node:sqlite';
 import {StreamableHTTPServerTransport} from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import {mkdtempSync,writeFileSync,mkdirSync} from 'node:fs';
+import {writeFileSync,mkdirSync} from 'node:fs';
 import {join} from 'node:path';
-process.env.DATABASE_PATH=join(mkdtempSync(join(process.cwd(),'data-test-')),'test.sqlite');
+process.env.DATABASE_PATH=join(testDirectory("unit"),'test.sqlite');
 process.env.SALES_BUDDY_TEST_MODE='1';
 process.env.MEMORY_ROOT=join(process.env.DATABASE_PATH,'..','memory');
 const D=await import('../apps/server/src/db.ts');
@@ -26,7 +27,7 @@ before(async()=>{
  const app=express();app.use(express.json());app.post('/mcp',async(req,res)=>{try{const user=C.fromToken(String(req.headers.authorization).replace('Bearer ',''));const s=P.createMcpServer(user);const t=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});res.on('close',()=>{void t.close();void s.close()});await s.connect(t);await t.handleRequest(req,res,req.body);}catch(e:any){res.status(403).json({message:e.message});}});
  server=await new Promise<any>(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});process.env.APP_PORT=String(server.address().port);token=C.session(u.id);client=await P.connectMcp(token);
 });
-after(async()=>{await client?.close();await new Promise<void>(r=>server.close(()=>r()));mkdirSync('docs',{recursive:true});writeFileSync('docs/test-results.json',JSON.stringify({at:new Date().toISOString(),mode:'deterministic_and_real_mcp',database:'isolated temporary SQLite',results},null,2));D.db.close();});
+after(async()=>{await client?.close();await new Promise<void>(r=>server.close(()=>r()));mkdirSync('docs',{recursive:true});writeFileSync('runtime/reports/test-results.json',JSON.stringify({at:new Date().toISOString(),mode:'deterministic_and_real_mcp',database:'isolated temporary SQLite',results},null,2));D.db.close();});
 for(let n=0;n<9;n++)for(const variant of ['N','M','C']){
  check('ST-S'+n+'-'+variant,'阶段'+n+' '+({N:'正常证据',M:'信息缺失',C:'证据冲突'} as any)[variant],()=>{
  const id='TEST-ST-'+n+'-'+variant;const p=K.profiles[n];const evidence=Object.fromEntries(p.requiredEvidence.map(x=>[x.key,variant==='N']));const r:any={id,type:n===0?'lead':'opportunity',customerId:scope.customerId,name:'阶段测试',stage:'S'+n,status:'open',description:variant==='N'?'明确需求':'',evidence,caseType:variant==='C'?'conflict':'normal',updatedAt:D.now()};D.saveRecord(r);
@@ -67,8 +68,8 @@ check('WB-02','历史回答保留对应工作台快照',()=>{const snapshot=C.ow
 check('WB-03','新会话不会继承旧回答工作台',()=>{const c=A.createConversation(u,scope);assert.ok(!D.list('workbenches').some(w=>w.conversationId===c.id));});
 check('KB-01','国家适用性过滤',()=>{const cards=K.searchKnowledge('自供电 政策','S3','GB');assert.ok(cards.every(k=>!JSON.parse(k.countries).length||JSON.parse(k.countries).includes('GB')));});
 check('KB-02','来源保留时点与历史适用说明',()=>{assert.ok(K.sourceCatalog.every((s:any)=>s.retrievedAt==='2026-10-25'&&s.fullTextReview==='pending'));assert.ok(K.sourceCatalog.some((s:any)=>s.summary.includes('历史')));});
-check('KB-03','收益讨论包含资料不足边界',()=>{assert.ok(D.readFileSync('knowledge/playbooks/commercial_industrial.md','utf8').includes('不承诺回收期'));});
-check('KB-04','无授权资料不编造正式商务政策',()=>{const p=JSON.parse(D.readFileSync('knowledge/demo-policy.json','utf8'));assert.equal(p.fictional,true);assert.ok(p.rule.includes('不作底价'));});
+check('KB-03','收益讨论包含资料不足边界',()=>{assert.ok(D.readFileSync('knowledge/sales/playbooks/commercial_industrial.md','utf8').includes('不承诺回收期'));});
+check('KB-04','无授权资料不编造正式商务政策',()=>{const p=JSON.parse(D.readFileSync('knowledge/sales/demo-policy.json','utf8'));assert.equal(p.fictional,true);assert.ok(p.rule.includes('不作底价'));});
 check('RT-01','磁盘数据库可重新连接读取',()=>{const c=new DatabaseSync(D.dbPath);assert.ok(c.prepare('SELECT id FROM users WHERE id=?').get(u.id));assert.ok(c.prepare('SELECT id FROM documents WHERE collection=? AND id=?').get('answers',completed.id));c.close();});
 check('RT-02','模型未配置时禁止伪装live',()=>{const old=process.env.MODEL_API_KEY;delete process.env.MODEL_API_KEY;const c=A.createConversation(u,scope);assert.throws(()=>A.startRun(u,token,c.id,'分析','live'),/配置/);if(old)process.env.MODEL_API_KEY=old;});
 
@@ -99,4 +100,5 @@ check('QA-04','活动创建草稿来自当前计划，创建建议不能跨用�
 check('FQ-01','继续讨论随提问和实体变化，常用工具不混为动态追问',async()=>{assert.ok(completed.actions.filter((a:any)=>a.presentation==='question').every((a:any)=>a.actionType==='followup'));const F=await import('../apps/server/src/followups.ts');const price=await F.generateFollowups(u,{...completed,userQuestion:'竞品便宜8%，怎么回应？'});const activity=await F.generateFollowups(u,{...completed,userQuestion:'准备活动',responsePurpose:'activity_plan'});assert.notDeepEqual(price.map((a:any)=>a.goal),activity.map((a:any)=>a.goal));assert.ok(price.some((a:any)=>a.goal.includes('Sarah')));assert.ok(activity.some((a:any)=>a.goal.includes('David')));assert.ok(price.every((a:any)=>a.entityIds.includes(scope.objectId)));});
 check('FQ-02','点击动态追问保留可见原话与来源标记，不展开成系统Prompt',async()=>{const action=completed.actions.find((a:any)=>a.actionType==='followup');const result=await A.prepareAction(u,token,completed.id,action.id);assert.equal(result.prefill,action.goal);assert.equal(result.run,undefined);const task=completed.tools.find((a:any)=>a.actionType==='prepare_task');const clicked=await A.prepareAction(u,token,completed.id,task.id);await waitForAnswer(clicked.run);assert.ok(clicked.run);const visible=D.get('messages',clicked.run.userMessageId);assert.equal(visible.content,'整理下一步待办');assert.equal(visible.origin,'tool_shortcut');});
 
+check('FQ-04','混合模型输出只保留销售委托，逐条容错，不为补齐按钮再次调用模型',async()=>{const F=await import('../apps/server/src/followups.ts');const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw new Error('不得额外调用模型');};try{const questions=await F.generateFollowups(u,{...completed,mode:'live'},[{question:'Hassan是否为最终签批人？',entityIds:[scope.objectId]},{question:'请提供当前预算审批情况',entityIds:[scope.objectId]},{question:'帮我整理客户审批路径，标出待核实角色',entityIds:[scope.objectId]},{question:'帮我查看联系人信息和历史商务活动',entityIds:['OUTSIDE-SCOPE']},{question:'帮我创建待办',entityIds:[scope.objectId]},{question:'无效格式'},{question:'帮我准备下次向客户确认预算归属的话术',entityIds:[scope.objectId]}]);assert.equal(questions.length,2);assert.ok(questions.every(q=>q.goal.startsWith('帮我')));assert.equal(calls,0);const one=await F.generateFollowups(u,{...completed,mode:'live'},[{question:'帮我整理项目画像更新建议',entityIds:[scope.objectId]}]);assert.equal(one.length,1);}finally{globalThis.fetch=original;}});
 check('FQ-03','同轮追问保留全文且不额外调用模型，缺失时保留主回答',async()=>{const F=await import('../apps/server/src/followups.ts');const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw new Error('不应调用模型');};try{const question='针对英国储能一期当前的采购评审背景，'.repeat(10)+'下一次会议如何推动明确决策参与人和下一评审节点？';const questions=await F.generateFollowups(u,{...completed,mode:'live'},[{question,entityIds:[scope.objectId]},{question:'针对英国储能一期，如何与现有联系人核实技术评审安排？',entityIds:[scope.objectId]}]);assert.equal(questions[0].label,question);assert.equal(questions[0].goal,question);assert.equal(calls,0);await assert.rejects(()=>F.generateFollowups(u,{...completed,mode:'live'},[]));assert.equal(calls,0);}finally{globalThis.fetch=original;}});

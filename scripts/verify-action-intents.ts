@@ -1,7 +1,8 @@
+import {mkdirSync as ensureReportDirectory} from 'node:fs';ensureReportDirectory('runtime/reports',{recursive:true});
 import {DatabaseSync} from 'node:sqlite';
 import {writeFileSync} from 'node:fs';
 const base='http://127.0.0.1:3001';
-const db=new DatabaseSync('data/app.sqlite',{readOnly:true});
+const db=new DatabaseSync('runtime/app/app.sqlite',{readOnly:true});
 const counts=()=>({records:Number((db.prepare('SELECT COUNT(*) n FROM records').get() as any).n),drafts:Number((db.prepare("SELECT COUNT(*) n FROM documents WHERE collection='drafts'").get() as any).n)});
 const login:any=await (await fetch(base+'/api/mock-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:'U-018'})})).json();
 const call=async(path:string,body?:any)=>{const r=await fetch(base+'/api'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',Authorization:'Bearer '+login.token},...(body?{body:JSON.stringify(body)}:{})});const j:any=await r.json();if(!r.ok)throw new Error(j.message);return j;};
@@ -15,4 +16,4 @@ const afterSuggestion=counts();const history=await call('/conversations/'+source
 const create=answer.actions.find((a:any)=>a.actionType==='create_activity_draft');if(!create)throw new Error('缺少独立活动创建建议');
 const prepared=await call('/actions/prepare',{answerId:answer.id,actionId:create.id});const afterDraft=counts();
 const report={at:new Date().toISOString(),status:before.records===afterSuggestion.records&&before.drafts===afterSuggestion.drafts&&afterDraft.records===before.records&&prepared.draft?.kind==='activity'?'passed':'failed',runId:result.run.id,answerId:answer.id,draftId:prepared.draft?.id,suggestionDidNotCreateDraft:before.drafts===afterSuggestion.drafts,crmUnchanged:before.records===afterDraft.records,createPresentation:create.presentation,scope:'单条真实模型活动准备与草稿验证；未确认写入业务记录'};
-writeFileSync('docs/action-intents-live-result.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));db.close();if(report.status!=='passed')process.exitCode=1;
+writeFileSync('runtime/reports/action-intents-live-result.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));db.close();if(report.status!=='passed')process.exitCode=1;

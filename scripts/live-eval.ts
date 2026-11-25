@@ -1,3 +1,4 @@
+import {mkdirSync as ensureReportDirectory} from 'node:fs';ensureReportDirectory('runtime/reports',{recursive:true});
 import 'dotenv/config';
 import {writeFileSync,mkdirSync} from 'node:fs';
 const base='http://127.0.0.1:'+(process.env.APP_PORT||3001);
@@ -6,7 +7,7 @@ cases.push({stage:'S3',question:'客户说竞品低8%，如何回应？'},{stage
 mkdirSync('fixtures/evaluations',{recursive:true});writeFileSync('fixtures/evaluations/live-questions.json',JSON.stringify(cases,null,2));
 mkdirSync('docs',{recursive:true});
 if(!process.env.MODEL_API_BASE_URL||!process.env.MODEL_API_KEY||!process.env.MODEL_NAME){
- writeFileSync('docs/live-results.json',JSON.stringify({at:new Date().toISOString(),mode:'live',status:'blocked',planned:30,executed:0,reason:'未配置MODEL_API_BASE_URL、MODEL_API_KEY、MODEL_NAME，未调用模型，不计为通过。',businessReview:'pending'},null,2));
+ writeFileSync('runtime/reports/live-results.json',JSON.stringify({at:new Date().toISOString(),mode:'live',status:'blocked',planned:30,executed:0,reason:'未配置MODEL_API_BASE_URL、MODEL_API_KEY、MODEL_NAME，未调用模型，不计为通过。',businessReview:'pending'},null,2));
  console.log('LIVE BLOCKED: 30条问题已准备，在线模型未配置，执行0条。');process.exitCode=2;
 }else{
  const login=await fetch(base+'/api/mock-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:'U-ADMIN'})}).then(r=>r.json()) as any;
@@ -21,7 +22,7 @@ if(!process.env.MODEL_API_BASE_URL||!process.env.MODEL_API_KEY||!process.env.MOD
  }catch(e:any){results.push({id:i+1,...c,status:'failed',error:e.message});}
  console.log('Live '+(i+1)+'/30: '+results.at(-1)?.status);
  }
- writeFileSync('docs/live-results.json',JSON.stringify({at:new Date().toISOString(),mode:'live',status:'executed',planned:30,executed:results.length,model:process.env.MODEL_NAME,results,businessReview:'pending'},null,2));
+ writeFileSync('runtime/reports/live-results.json',JSON.stringify({at:new Date().toISOString(),mode:'live',status:'executed',planned:30,executed:results.length,model:process.env.MODEL_NAME,results,businessReview:'pending'},null,2));
  if(results.some(x=>x.status==='failed'))process.exitCode=1;
 }
 

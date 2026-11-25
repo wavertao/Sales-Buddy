@@ -1,9 +1,10 @@
+import {testDirectory} from './helpers/temp.ts';
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,existsSync} from 'node:fs';
+import {readFileSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
 import JSZip from 'jszip';
-const root=mkdtempSync(join(process.cwd(),'data-test-meetings-'));process.env.DATABASE_PATH=join(root,'app.sqlite');process.env.MEMORY_ROOT=join(root,'memory');process.env.SALES_BUDDY_TEST_MODE='1';
+const root=testDirectory("meetings-");process.env.DATABASE_PATH=join(root,'app.sqlite');process.env.MEMORY_ROOT=join(root,'memory');process.env.SALES_BUDDY_TEST_MODE='1';
 const D=await import('../apps/server/src/db.ts'),C=await import('../apps/server/src/crm.ts'),M=await import('../apps/server/src/meetings.ts'),A=await import('../apps/server/src/materials.ts'),E=await import('../apps/server/src/presentation-engine.ts');
 const {seed}=await import('../apps/server/src/seed.ts');seed();const u=C.user('U-018'),other=C.user('U-019');
 const scope={objectType:'opportunity' as const,objectId:'OP-UK-026',customerId:'C-UK-0086'};

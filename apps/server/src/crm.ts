@@ -1,3 +1,4 @@
+import {managedSalesIds,managedTeams,inManagedScope} from './spp.ts';
 import {z} from 'zod';
 import {randomBytes} from 'node:crypto';
 import {db,record,allRecords,saveRecord,put,get,list,uid,now,meta} from './db.ts';
@@ -6,10 +7,10 @@ export function users():User[]{return(db.prepare('SELECT * FROM users').all() as
 export function user(id:string){const u=users().find(u=>u.id===id);if(!u)throw new AppError('FORBIDDEN','用户不存在',403);return u;}
 export function session(userId:string){user(userId);const token=randomBytes(32).toString('hex');put('sessions',token,{userId});return token;}
 export function fromToken(token:string){const s=get('sessions',token);if(!s)throw new AppError('FORBIDDEN','请重新选择Mock用户',401);return user(s.userId);}
-export function canAccess(u:User,customerId:string){const c=record(customerId);if(!c||c.type!=='customer')return false;const owner=users().find(x=>x.id===c.ownerId);return u.role==='admin'||c.ownerId===u.id||(u.role==='manager'&&owner?.teamId===u.teamId);}
+export function canAccess(u:User,customerId:string){const c=record(customerId);if(!c||c.type!=='customer')return false;const owner=users().find(x=>x.id===c.ownerId);return u.role==='admin'||c.ownerId===u.id||(u.role==='manager'&&(owner?.teamId===u.teamId||managedSalesIds(u).has(c.ownerId)));}
 export function allowedRecord(u:User,id:string,type?:string){const r=record(id);if(!r)throw new AppError('NOT_FOUND','记录不存在',404);if(type&&r.type!==type)throw new AppError('INVALID_ARGUMENT','实体类型不匹配');if(!canAccess(u,r.customerId))throw new AppError('FORBIDDEN','无权访问当前对象',403);return r;}
 export function authorize(u:User,scope:Scope){scopeSchema.parse(scope);const r=allowedRecord(u,scope.objectId,scope.objectType);if(r.customerId!==scope.customerId)throw new AppError('INVALID_ARGUMENT','客户归属不一致');return r;}
-export function own(u:User,collection:string,id:string){const d=get(collection,id);if(!d)throw new AppError('NOT_FOUND','记录不存在',404);if(d.userId!==u.id)throw new AppError('FORBIDDEN','此会话/执行记录不属于当前用户',403);if(d.scope)authorize(u,d.scope);return d;}
+export function own(u:User,collection:string,id:string){const d=get(collection,id);if(!d)throw new AppError('NOT_FOUND','记录不存在',404);if(d.userId!==u.id)throw new AppError('FORBIDDEN','此会话/执行记录不属于当前用户',403);if(d.scope)authorize(u,d.scope);if(collection==='conversations'&&d.cueAccess){if(!managedTeams(u).some(t=>t.id===d.cueAccess.teamId))throw new AppError('FORBIDDEN','团队管理权限已变化',403);for(const id of d.cueAccess.recordIds){const r=allowedRecord(u,id);if(!inManagedScope(u,r))throw new AppError('FORBIDDEN','团队范围已变化',403);}}if(collection==='runs'&&d.conversationId&&get('conversations',d.conversationId)?.cueAccess)own(u,'conversations',d.conversationId);return d;}
 export function ref(r:any){return{recordId:r.id,entityType:r.type,title:r.name,customerId:r.customerId,updatedAt:r.updatedAt,capturedAt:new Date().toISOString(),sourceKind:'crm',excerpt:r.content||r.summary||r.description||'',relation:{objectType:r.entityType||'customer',objectId:r.entityId||r.customerId}};}
 const querySchema=z.object({projectId:z.string().optional(),customerId:z.string().optional(),scope:scopeSchema.optional(),query:z.string().max(200).optional(),stage:z.string().optional(),status:z.string().optional(),cursor:z.number().int().min(0).default(0),limit:z.number().int().min(1).max(30).default(20)});
 const idSchema=z.object({id:z.string().min(1)});

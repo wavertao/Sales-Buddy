@@ -1,0 +1,11 @@
+import 'dotenv/config';
+import {dirname,join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+export const projectRoot=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+export const runtimeRoot=join(projectRoot,'runtime');
+export const reportsRoot=join(runtimeRoot,'reports');
+export const salesKnowledgeRoot=join(projectRoot,'knowledge','sales');
+export const researchRoot=join(projectRoot,'knowledge','research');
+export const presentationLibraryRoot=join(projectRoot,'assets','presentations','library');
+export const databasePath=()=>resolve(process.env.DATABASE_PATH||join(runtimeRoot,'app','app.sqlite'));
+export const memoryRoot=()=>resolve(process.env.MEMORY_ROOT||join(dirname(databasePath()),'memory'));

@@ -1,0 +1,30 @@
+/* Keep project context light and leave the conversation room to breathe. */
+.mobile-navigator-entry{display:block;flex:none;padding:0 28px 8px;background:#fff}
+.mobile-navigator-entry .navigator-compact{padding:8px 0 0;margin:0;border:0}
+.navigator-mobile-actions{display:block}
+.navigator-status-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:28px}
+.navigator-status-heading>small{font-size:11px;color:#8396ae}
+.navigator-mobile-actions .navigator-collapse{display:flex;align-items:center;justify-content:center;background:transparent;padding:6px;color:#8b9bb0}
+.navigator-assessment-entry{margin-top:6px}
+.navigator-mobile-actions .navigator-assessment-entry button{padding:7px 12px;border-radius:16px;font-size:11px;background:#edf4ff;color:#4875ad}
+.navigator-stage-badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.navigator-stage-badges span{font-size:11px;font-weight:500;color:#5d7c9d;background:#f1f5fa;padding:4px 9px;border-radius:6px}
+.navigator-stage-badges .crm-stage{background:#eaf2ff;color:#386fb5}
+.navigator-composer-bubbles{display:flex;flex:none;gap:8px;width:min(100%,680px);margin:0 auto 9px;align-items:center}
+.navigator-composer-bubbles button{font-size:11px;line-height:18px;padding:6px 12px;border:1px solid #e1e9f5;border-radius:18px;background:#ffffffed;color:#6484ad;box-shadow:0 3px 10px #31527c08;white-space:nowrap}
+.conversation>.composer,.general-chat>.chat-composer{display:block;flex:none;box-sizing:border-box;width:min(100%,680px);align-self:center;padding:10px 12px;border:1px solid #dce1f2;background:#fff;border-radius:16px;box-shadow:0 5px 30px #364e8304}
+.conversation>.composer textarea,.general-chat>.chat-composer textarea{display:block;box-sizing:border-box;width:100%;height:40px;min-height:40px;max-height:120px;padding:0;resize:none;border:0;box-shadow:none;background:transparent;font-size:13px}
+.general-chat>.chat-composer>div{display:flex;justify-content:flex-end;align-items:center}
+.general-chat>.chat-composer .send{display:flex;align-items:center;justify-content:center;width:33px;height:33px;border-radius:50%;padding:0}
+@media(max-width:820px){
+ .app .mobile-navigator-entry{padding:0 16px 8px}
+ .app .mobile-navigator-entry .navigator-compact{padding:6px 0 0;margin:0;border:0}
+ .app .conversation{padding:0 16px 10px}
+ .app .navigator-composer-bubbles{width:calc(100% - 16px);margin-bottom:8px;gap:7px}
+ .app .navigator-composer-bubbles button{padding:5px 11px;font-size:11px}
+ .app .conversation>.composer,.app .general-chat>.chat-composer{width:calc(100% - 16px);padding:9px 11px;border-radius:16px}
+ .app .conversation>.composer textarea,.app .general-chat>.chat-composer textarea{height:36px;min-height:36px;max-height:100px;font-size:16px;line-height:24px}
+ .app .conversation>.composer .send,.app .general-chat>.chat-composer .send{width:30px;height:30px}
+ .app .conversation>.composer>div{justify-content:flex-end}
+ .app .conversation>.composer button.soft{font-size:12px;padding:7px 12px}
+}

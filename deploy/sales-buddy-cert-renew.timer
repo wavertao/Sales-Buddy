@@ -1,0 +1,8 @@
+[Unit]
+Description=Check Sales Buddy certificate renewal daily
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=3600
+[Install]
+WantedBy=timers.target

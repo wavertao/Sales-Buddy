@@ -1,4 +1,5 @@
 import {topicalScore,slideThemes} from './material-matching.ts';
+import {presentationLibraryRoot} from '../../../packages/paths.ts';
 import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs';
 import {join,resolve,extname} from 'node:path';
 import {createHash} from 'node:crypto';
@@ -9,7 +10,7 @@ import {AppError,type User,type Scope} from '../../../packages/contracts/index.t
 import {inspectPptx} from './presentation-engine.ts';
 import {presentationWork,materialRoot} from './presentation-jobs.ts';
 import {tokens} from './knowledge.ts';
-import {presentationCategories,researchSources} from '../../../knowledge/presentations/catalog.ts';
+import {presentationCategories,researchSources} from '../../../assets/presentations/catalog.ts';
 export {presentationCategories,researchSources};
 export const stamp=()=>new Date().toISOString();
 export const material=(id:string)=>get('materials',id);
@@ -20,7 +21,7 @@ export function materialView(m:any){const {file,previewDir,sha256,...safe}=m;ret
 export function materialList(u:User,query:any={}){return list('materials').filter(m=>(query.personal?m.userId===u.id:!m.userId||m.userId===u.id)&&m.status!=='disabled'&&(!m.scope||canAccess(u,m.scope.customerId))).filter(m=>!query.source||query.source==='all'||m.source===query.source).filter(m=>!query.q||(m.title+' '+m.filename+' '+m.keywords+' '+(m.scope?.objectId||'')).toLowerCase().includes(String(query.q).toLowerCase())).map(materialView);}
 export async function initMaterialLibrary(){
  db.exec('CREATE VIRTUAL TABLE IF NOT EXISTS material_fts USING fts5(id UNINDEXED,text);');
- const root=resolve('knowledge/presentations/library'),manifest=join(root,'manifest.json');if(!existsSync(manifest))return;
+ const root=presentationLibraryRoot,manifest=join(root,'manifest.json');if(!existsSync(manifest))return;
  for(const d of JSON.parse(readFileSync(manifest,'utf8'))){const id='public-'+d.id+'-v'+d.version;const existing=get('materials',id);if(existing?.indexVersion===3)continue;const file=join(root,d.file);if(!existsSync(file))continue;const info=await inspectPptx(readFileSync(file));saveMaterial({...d,indexVersion:3,id,userId:null,source:'public',format:'pptx',status:'ready',file,filename:d.file,previewDir:join(root,'previews',d.id),slides:info.slides.map((s,i)=>({...s,text:s.text,summary:d.slides[i]?.summary||'',previewAvailable:existsSync(join(root,'previews',d.id,`${i+1}.png`))})),createdAt:d.createdAt,updatedAt:stamp()});}
  for(const m of list('materials').filter(m=>m.status==='parsing'))saveMaterial({...m,status:'failed',error:'服务重启，解析已中断，可重试',updatedAt:stamp()});
 }

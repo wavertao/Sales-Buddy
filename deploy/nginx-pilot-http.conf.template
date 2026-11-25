@@ -1,0 +1,10 @@
+server {
+    listen 80;
+    server_name SALES_BUDDY_DOMAIN;
+    location ^~ /.well-known/acme-challenge/ {
+        root /opt/sales-buddy/acme-web;
+    }
+    location / {
+        return 503 "Sales Buddy HTTPS setup in progress\n";
+    }
+}

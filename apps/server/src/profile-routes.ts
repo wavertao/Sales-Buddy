@@ -1,0 +1,15 @@
+import {Router} from 'express';
+import {z} from 'zod';
+import {get,allRecords} from './db.ts';
+import {allowedRecord} from './crm.ts';
+import {readStructuredProfile,editStructuredProfile,renderStructuredMarkdown,projectStructuredMarkdown,profilePrivateHistory,publishMptState,sharedMpt} from './structured-profiles.ts';
+import {AppError} from '../../../packages/contracts/index.ts';
+const kind=z.enum(['personal','customer','project']);
+export const profileRoutes=Router();
+profileRoutes.get('/profiles',(_req,res)=>{const u=res.locals.user;res.json({personal:{id:u.id,name:u.name},customers:allRecords('customer').flatMap(r=>{try{allowedRecord(u,r.id,'customer');return[{id:r.id,name:r.name}];}catch{return[];}}),projects:allRecords('opportunity').filter(r=>/^S[1-4]$/.test(r.stage)).flatMap(r=>{try{allowedRecord(u,r.id,'opportunity');return[{id:r.id,name:r.name,customerId:r.customerId,stage:r.stage}];}catch{return[];}})});});
+profileRoutes.get('/profiles/:kind/:id',(req,res)=>res.json(readStructuredProfile(res.locals.user,kind.parse(req.params.kind),req.params.id)));
+profileRoutes.patch('/profiles/:kind/:id',(req,res)=>res.json(editStructuredProfile(res.locals.user,kind.parse(req.params.kind),req.params.id,req.body)));
+profileRoutes.get('/profiles/:kind/:id/history',(req,res)=>res.json(profilePrivateHistory(res.locals.user,kind.parse(req.params.kind),req.params.id)));
+profileRoutes.get('/profiles/:kind/:id/markdown',(req,res)=>{const p=readStructuredProfile(res.locals.user,kind.parse(req.params.kind),req.params.id);res.type('text/markdown').send(renderStructuredMarkdown(p));});
+profileRoutes.post('/profiles/:kind/:id/projection',(req,res)=>{const k=kind.parse(req.params.kind);readStructuredProfile(res.locals.user,k,req.params.id);projectStructuredMarkdown(res.locals.user,k,req.params.id);res.json(readStructuredProfile(res.locals.user,k,req.params.id));});
+profileRoutes.post('/profiles/project/:id/share-mpt',(req,res)=>{const u=res.locals.user,r=allowedRecord(u,req.params.id,'opportunity'),p=get('navigator_projects',`${u.id}:opportunity:${r.id}`);if(sharedMpt(u,r.id))throw new AppError('CONFLICT','已有共享定位，请通过MPT评估更新',409);if(!p?.assessed)throw new AppError('INVALID_ARGUMENT','请先完成并确认MPT评估');publishMptState(u,{objectType:'opportunity',objectId:r.id,customerId:r.customerId},p);projectStructuredMarkdown(u,'project',r.id);res.json(readStructuredProfile(u,'project',r.id));});

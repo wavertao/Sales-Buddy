@@ -1,0 +1,5 @@
+[Unit]
+Description=Renew Sales Buddy HTTPS certificate
+[Service]
+Type=oneshot
+ExecStart=/opt/sales-buddy/acme/bin/certbot renew --quiet --deploy-hook "/usr/sbin/nginx -t && /bin/systemctl reload nginx"

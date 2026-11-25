@@ -75,6 +75,6 @@ Gulf Industry 的 OP-008 对应 Dubai Jebel Ali，OP-020 对应 Abu Dhabi Mussaf
 
 执行 `npx tsx scripts/upgrade-mock-fixtures.ts` 会先使用SQLite一致性备份，再运行幂等增量升级。替换前的样例记录保存于 mock_fixture_archive 文档集合；不清空对话、画像、用户上传和用户创建记录。不要使用场景重置代替升级。
 
-本次备份位于 `data/backups/app-before-linked-2026-10-27T14-23-13-865Z.sqlite`。升级后1135条记录的关联检查无异常。相关实现：mock-fixtures-v2.ts、project-interview.ts、crm.ts、agent.ts、project-portrait.ts、memory-v3.ts。
+本次备份位于 `runtime/backups/app-before-linked-2026-10-27T14-23-13-865Z.sqlite`。升级后1135条记录的关联检查无异常。相关实现：mock-fixtures-v2.ts、project-interview.ts、crm.ts、agent.ts、project-portrait.ts、memory-v3.ts。
 
 历史自由文本中的旧姓名及旧助手错误不批量改写。模型使用新记录回答；历史文本只作为对话历史，不能替代最新来源。

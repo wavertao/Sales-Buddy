@@ -22,3 +22,5 @@ docs/*.json
 docs/screenshots/
 .DS_Store
 Thumbs.db
+
+runtime/

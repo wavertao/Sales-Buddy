@@ -3,9 +3,9 @@ import {resolve,join} from 'node:path';
 import {homedir} from 'node:os';
 import {pathToFileURL} from 'node:url';
 import {createPptx,type SlideContent} from '../apps/server/src/presentation-engine.ts';
-import {mockTopics,researchSources,presentationCategories} from '../knowledge/presentations/catalog.ts';
+import {mockTopics,researchSources,presentationCategories} from '../assets/presentations/catalog.ts';
 process.env.RUNTIME_NODE_MODULES=join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules');
-const root=resolve('knowledge/presentations/library'),build=resolve('.build/p11-library');mkdirSync(root,{recursive:true});mkdirSync(build,{recursive:true});
+const root=resolve('assets/presentations/library'),build=resolve('runtime/build/p11-library');mkdirSync(root,{recursive:true});mkdirSync(build,{recursive:true});
 const skill=join(homedir(),'.codex/plugins/cache/openai-primary-runtime/presentations/26.1024.11018/skills/presentations');
 const {finalizePresentation}=await import(pathToFileURL(join(skill,'container_tools/artifact_tool_utils.mjs')).href);
 const manifest=[];
@@ -13,5 +13,5 @@ try{for(const topic of mockTopics){const file=join(root,topic.id+'.pptx'),previe
  const contents:SlideContent[]=[{title:topic.english,subtitle:'Customer meeting reference material',mock:true,layout:'cover',notes},...topic.pages.map(([title,bullets],i)=>({title,bullets,mock:true,notes,...(i===2?{columns:[{title:'Discussion focus',items:bullets.slice(0,2)},{title:'Customer confirmation',items:[bullets[2],'Record unresolved items and owners']}],bullets:[]}:{} )})),{title:'Discussion and next steps',bullets:['Confirm the customer priorities','Agree owners for open questions','Set the next review milestone'],mock:true,notes}];
  if(!existsSync(file)){const draft=join(build,topic.id+'.pptx');await createPptx(contents,draft,previews);await finalizePresentation({workspaceDir:process.cwd(),candidatePath:draft,finalPath:file,pythonExecutable:join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'),integrityValidatorPath:join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','12192000,6858000','--validate-heading-fit'],requiredNativeTableOwnerSlides:[],fontPolicy:{basis:'design',families:['Arial']},verifyArtifactToolImport:true,explicitTotalSlideCount:8,receiptPath:join(build,topic.id+'.validation.json')});}
  manifest.push({id:topic.id,title:topic.title,english:topic.english,mode:topic.mode,category:presentationCategories.find(c=>c.id===topic.id)?.category,language:'en',version:1,mock:true,keywords:topic.keywords,sourceIds:topic.sourceIds,file:topic.id+'.pptx',slides:contents.map((c,i)=>({page:i+1,title:c.title,keywords:topic.keywords,summary:c.bullets?.join(' ')||c.subtitle||c.title})),createdAt:'2026-10-26T09:00:00+08:00'});console.log(topic.id+' 8 editable slides ready');}
- writeFileSync(join(root,'manifest.json'),JSON.stringify(manifest,null,2));writeFileSync(resolve('knowledge/presentations/research-sources.json'),JSON.stringify(researchSources,null,2));console.log('P11 library: '+manifest.length+' decks / '+manifest.length*8+' slides');process.exit(0);
+ writeFileSync(join(root,'manifest.json'),JSON.stringify(manifest,null,2));writeFileSync(resolve('assets/presentations/research-sources.json'),JSON.stringify(researchSources,null,2));console.log('P11 library: '+manifest.length+' decks / '+manifest.length*8+' slides');process.exit(0);
 }catch(e:any){console.error(String(e.message).slice(0,2000));process.exit(1);}

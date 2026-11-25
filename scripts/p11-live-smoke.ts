@@ -1,7 +1,9 @@
-import {mkdtempSync,writeFileSync} from 'node:fs';
+import {mkdirSync as ensureReportDirectory} from 'node:fs';ensureReportDirectory('runtime/reports',{recursive:true});
+import {testDirectory} from '../tests/helpers/temp.ts';
+import {writeFileSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 // Isolated data; only generic, invented meeting text and public MOCK material go to the configured model.
-const root=mkdtempSync(resolve('data-test-p11-live-'));
+const root=testDirectory("p11-live-");
 process.env.DATABASE_PATH=join(root,'app.sqlite');process.env.MEMORY_ROOT=join(root,'memory');process.env.SALES_BUDDY_TEST_MODE='';
 const D=await import('../apps/server/src/db.ts'),C=await import('../apps/server/src/crm.ts'),M=await import('../apps/server/src/meetings.ts'),A=await import('../apps/server/src/materials.ts');
 const {seed}=await import('../apps/server/src/seed.ts');const {initKnowledge}=await import('../apps/server/src/knowledge.ts');seed();initKnowledge();await A.initMaterialLibrary();const u=C.user('U-018');
@@ -15,4 +17,4 @@ try{
  k=await finish(M.generatePage(u,k.id,k.pages[0].id,{revision:k.revision,supplement:'Keep the slide concise. Only describe discussion objectives, not a product commitment.'}));k=M.choosePage(u,k.id,k.pages[0].id,{revision:k.revision,mode:'confirm_generated'});k=await finish(M.exportKit(u,k.id,{revision:k.revision}));
  result={ok:true,runtime:'online model, no fixture',scope:'unbound generic invented meeting; public MOCK only',planningLanguage:'zh',pptLanguage:k.brief.language,proposedPages,exportedPages:k.pages.length,personalMaterials:A.materialList(u,{personal:true}).length,steps,elapsedMs:Date.now()-started};
 }catch(e:any){result={ok:false,steps,error:e.message,elapsedMs:Date.now()-started};process.exitCode=1;}
-writeFileSync('docs/p11-live-smoke.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));D.db.close();
+writeFileSync('runtime/reports/p11-live-smoke.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));D.db.close();

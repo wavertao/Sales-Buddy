@@ -1,8 +1,8 @@
+import {testDirectory} from './helpers/temp.ts';
 import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync} from 'node:fs';
 import {join} from 'node:path';
-const root=mkdtempSync(join(process.cwd(),'data-test-linked-'));process.env.DATABASE_PATH=join(root,'app.sqlite');process.env.MEMORY_ROOT=join(root,'memory');
+const root=testDirectory("linked-");process.env.DATABASE_PATH=join(root,'app.sqlite');process.env.MEMORY_ROOT=join(root,'memory');
 const D=await import('../apps/server/src/db.ts'),C=await import('../apps/server/src/crm.ts'),F=await import('../apps/server/src/mock-fixtures-v2.ts'),I=await import('../apps/server/src/project-interview.ts'),P=await import('../apps/server/src/project-portrait.ts');const {seed}=await import('../apps/server/src/seed.ts');seed();const u=C.user('U-018');after(()=>D.db.close());
 test('12个客户独立联系人、独立场址、项目联系人和资料，所有关联可验证',()=>{const audit=F.auditFixtureRelations();assert.deepEqual(audit.issues,[]);assert.equal(audit.counts.customer,12);assert.equal(audit.counts.contact,72);assert.equal(audit.counts.opportunity,24);assert.equal(audit.counts.lead,14);const names=D.allRecords('contact').map(c=>c.name);assert.equal(new Set(names).size,72);for(const o of D.allRecords('opportunity')){assert.ok(D.allRecords('opportunity_progress').filter(r=>r.entityId===o.id).length>=9);assert.equal(D.allRecords('project_contact').filter(r=>r.entityId===o.id).length,6);assert.ok(o.siteName);}});
 test('Gulf两项目是独立场址和预算，活动只用本客户联系人，S5不冒充合同已签',()=>{const a=D.record('OP-008'),b=D.record('OP-020');assert.notEqual(a.siteName,b.siteName);assert.notEqual(a.capacityMwh,b.capacityMwh);assert.notEqual(a.amount,b.amount);assert.equal(b.contractSigned,false);assert.equal(b.projectConditions.contract.state,'negotiating');for(const r of D.allRecords('activity').filter(r=>r.customerId==='C-AE-008')){assert.ok(!r.participants.includes('Sarah'));assert.ok(!r.participants.includes('David'));assert.ok(r.participantIds.every((id:string)=>D.record(id).customerId===r.customerId));}assert.equal(D.record('CT-7-3').organizationUnitId,'ORG-7-2');});
