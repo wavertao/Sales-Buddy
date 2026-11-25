@@ -14,6 +14,9 @@ import {meetingRoutes} from './meeting-routes.ts';
 import {p9Routes} from './p9/routes.ts';
 import {tenderRoutes} from './tender/routes.ts';
 import {seedP9} from './p9/seed-p9.ts';
+import {projectSpaceRoutes} from './project-space/routes.ts';
+import {seedProjectSpaces} from './project-space/seed.ts';
+import {recoverInterruptedThreads} from './project-space/service.ts';
 import {initMaterialLibrary} from './materials.ts';
 import {restartMeetingJobs} from './meetings.ts';
 import {userMode,testRuntime} from './runtime-mode.ts';
@@ -38,7 +41,7 @@ import {createConversation,history,recent,startRun,controllers,prepareAction,exe
 import {AppError,scopeSchema} from '../../../packages/contracts/index.ts';
 import {initEvaluations} from './evaluations.ts';
 if(process.env.SALES_BUDDY_TEST_MODE==='1'&&(!testRuntime()||process.env.APP_PORT==='3001'))throw new Error('固定响应仅允许隔离测试数据库与测试端口');
-seed();seedP9();initKnowledge();migrateMemories();
+seed();seedP9();seedProjectSpaces();recoverInterruptedThreads();initKnowledge();migrateMemories();
 await initNavigatorKnowledge();
 await initMaterialLibrary();restartMeetingJobs();
 initEvaluations();
@@ -64,6 +67,7 @@ app.use('/api',navigatorRoutes);app.use('/api',profileRoutes);let profileRetryBu
 app.use('/api',workbenchRoutes);
 app.use('/api',p9Routes);
 app.use('/api',tenderRoutes);
+app.use('/api',projectSpaceRoutes);
 app.get('/api/session',(_,res)=>res.json({user:res.locals.user,mode:'live',model:modelStatus()}));
 app.post('/api/mode',(req,res)=>{userMode(req.body.mode);res.json({mode:'live'});});
 app.get('/api/objects/search',(req,res)=>{
